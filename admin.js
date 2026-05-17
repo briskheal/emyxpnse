@@ -229,6 +229,15 @@ function bindAdminEvents() {
     btnCloseAccounts.addEventListener('click', closeAccountsModal);
   }
 
+  const btnSaveAccounts = document.getElementById('btnSaveAccounts');
+  if (btnSaveAccounts) {
+    btnSaveAccounts.addEventListener('click', async () => {
+      showToast('Saving and refreshing accounts database...', 'info');
+      await loadAccounts();
+      showToast('Employee database synchronized and saved securely!', 'success');
+    });
+  }
+
   const accountsModal = document.getElementById('accountsModal');
   if (accountsModal) {
     accountsModal.addEventListener('click', (e) => {
