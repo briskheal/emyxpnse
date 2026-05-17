@@ -457,6 +457,32 @@ app.delete('/api/ledger/item/:id', async (req, res) => {
   }
 });
 
+// REST API — Update individual expense item row (auditStatus and adminComment)
+app.put('/api/ledger/item/:id', async (req, res) => {
+  if (!dbEnabled) {
+    return res.status(503).json({ success: false, error: 'Database is in offline mode.' });
+  }
+
+  try {
+    const { auditStatus, adminComment, amount, name } = req.body;
+    const item = await db.ExpenseItem.findByPk(req.params.id);
+    if (!item) {
+      return res.status(404).json({ success: false, error: 'Expense item row not found.' });
+    }
+
+    if (auditStatus !== undefined) item.auditStatus = auditStatus;
+    if (adminComment !== undefined) item.adminComment = adminComment;
+    if (amount !== undefined) item.amount = amount;
+    if (name !== undefined) item.name = name;
+
+    await item.save();
+    res.json({ success: true, message: 'Expense row updated successfully.', item });
+  } catch (err) {
+    console.error('Row update failure:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // SPA routing fallback
 app.get('*', (req, res, next) => {
   // If request is for an API endpoint, do not send index.html

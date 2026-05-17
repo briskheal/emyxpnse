@@ -742,7 +742,7 @@ function importUserLedgerFile(file) {
 }
 
 // Interactive status update trigger (Approved/Flagged/Pending)
-function updateAuditStatus(dayId, expId, newStatus) {
+async function updateAuditStatus(dayId, expId, newStatus) {
   const day = findDay(dayId);
   if (!day) return;
   const exp = day.expenses.find(e => e.id === expId);
@@ -772,10 +772,24 @@ function updateAuditStatus(dayId, expId, newStatus) {
 
   // Update audit metrics progress counters
   updateAuditMetrics();
+
+  // If online, save permanently to the Supabase cloud database!
+  if (navigator.onLine) {
+    try {
+      await fetch(`/api/ledger/item/${expId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ auditStatus: newStatus })
+      });
+      console.log(`Cloud database: Updated auditStatus of item ${expId} to ${newStatus}`);
+    } catch (netErr) {
+      console.error('Failed to sync audit status to cloud:', netErr);
+    }
+  }
 }
 
 // Edit fields inline
-function updateExpenseField(dayId, expId, field, value) {
+async function updateExpenseField(dayId, expId, field, value) {
   const day = findDay(dayId);
   if (!day) return;
   const expense = day.expenses.find(e => e.id === expId);
@@ -793,6 +807,29 @@ function updateExpenseField(dayId, expId, field, value) {
 
   saveState();
   updateLiveTotals();
+
+  // If online, save permanently to the Supabase cloud database!
+  if (navigator.onLine) {
+    try {
+      const updatePayload = {};
+      if (field === 'adminComment') {
+        updatePayload.adminComment = value;
+      }
+      if (field === 'amount') updatePayload.amount = parseFloat(value) || 0;
+      if (field === 'name') updatePayload.name = value;
+
+      if (Object.keys(updatePayload).length > 0) {
+        await fetch(`/api/ledger/item/${expId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatePayload)
+        });
+        console.log(`Cloud database: Updated ${field} of item ${expId} to ${value}`);
+      }
+    } catch (netErr) {
+      console.error('Failed to sync expense field edit to cloud:', netErr);
+    }
+  }
 }
 
 // Delete expense item row in Admin Console
