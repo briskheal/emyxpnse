@@ -427,6 +427,11 @@ function renderWorkspace(searchQuery = '') {
     if (hideSynced && day.syncStatus === 'synced') {
       return;
     }
+
+    // 0b. Auto-exclude empty synced cards to keep employee portal clean
+    if (day.syncStatus === 'synced' && (!day.expenses || day.expenses.length === 0)) {
+      return;
+    }
     daysRenderedCount++;
 
     // Filter expenses if query is provided

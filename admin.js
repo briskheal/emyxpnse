@@ -114,7 +114,21 @@ async function fetchCloudLedger() {
     if (response.ok) {
       const result = await response.json();
       if (result.success && result.days) {
-        state.months[currentMonthKey] = { days: result.days };
+        // Automatically isolate and clean up empty day cards with zero expenses to keep dashboard pristine
+        const emptyDays = result.days.filter(d => !d.expenses || d.expenses.length === 0);
+        const validDays = result.days.filter(d => d.expenses && d.expenses.length > 0);
+
+        // Permanently clear empty days on Supabase database in background
+        for (const emptyDay of emptyDays) {
+          try {
+            await fetch(`/api/ledger/day/${emptyDay.id}`, { method: 'DELETE' });
+            console.log(`Pristine Mode: Auto-cleared empty cloud day card ${emptyDay.id}`);
+          } catch (netErr) {
+            console.error('Failed to purge empty cloud day:', netErr);
+          }
+        }
+
+        state.months[currentMonthKey] = { days: validDays };
         // We preserve local state save silently to prevent redundant write loop overhead
         await window.db.saveSheetData(state);
       }
@@ -452,6 +466,8 @@ function renderWorkspace(searchQuery = '') {
   const pickedEmp = adminEmpFilter ? adminEmpFilter.value : '';
 
   const filteredDays = currentMonth.days.filter(day => {
+    // 0. Auto-exclude any empty day records to keep dashboard completely clean
+    if (!day.expenses || day.expenses.length === 0) return false;
     // 1. Date Calendar Filter
     if (pickedDate && day.date !== pickedDate) return false;
     // 2. Employee Selector Filter
