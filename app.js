@@ -250,6 +250,12 @@ function bindEventListeners() {
     btnChangePassword.addEventListener('click', openPasswordModal);
   }
 
+  // 🔄 Sync Cloud Binding
+  const btnSyncCloud = document.getElementById('btnSyncCloud');
+  if (btnSyncCloud) {
+    btnSyncCloud.addEventListener('click', syncLocalDaysToCloud);
+  }
+
   const passwordClose = document.getElementById('passwordClose');
   if (passwordClose) {
     passwordClose.addEventListener('click', closePasswordModal);
@@ -319,6 +325,7 @@ function addNewDay() {
     id: `day-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     dayNumber: nextDayNum,
     date: defaultDateStr,
+    syncStatus: 'pending',
     expenses: []
   };
 
@@ -439,6 +446,17 @@ function renderWorkspace(searchQuery = '') {
     // Calculate Day Subtotal
     const dayTotal = day.expenses.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
 
+    // Sync Badge determination
+    let syncBadgeHtml = '';
+    const status = day.syncStatus || 'pending';
+    if (status === 'synced') {
+      syncBadgeHtml = `<span style="font-size:0.6rem; font-weight:700; background:rgba(16,185,129,0.15); color:var(--color-emerald); padding:3px 6px; border-radius:4px; border:1px solid rgba(16,185,129,0.3); display:inline-flex; align-items:center; gap:2px; text-transform:uppercase;">✅ Synced</span>`;
+    } else if (status === 'failed') {
+      syncBadgeHtml = `<span style="font-size:0.6rem; font-weight:700; background:rgba(244,63,94,0.15); color:var(--color-rose); padding:3px 6px; border-radius:4px; border:1px solid rgba(244,63,94,0.3); display:inline-flex; align-items:center; gap:2px; text-transform:uppercase;">⚠️ Failed</span>`;
+    } else {
+      syncBadgeHtml = `<span style="font-size:0.6rem; font-weight:700; background:rgba(245,158,11,0.15); color:var(--color-amber); padding:3px 6px; border-radius:4px; border:1px solid rgba(245,158,11,0.3); display:inline-flex; align-items:center; gap:2px; text-transform:uppercase;">⏳ Pending</span>`;
+    }
+
     const card = document.createElement('div');
     card.className = 'day-card';
     card.id = day.id;
@@ -446,7 +464,7 @@ function renderWorkspace(searchQuery = '') {
     // Build Stacked Day Card HTML
     card.innerHTML = `
       <div class="day-header">
-        <div class="day-info">
+        <div class="day-info" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
           <div class="day-badge" title="Tap to change Day value">
             Day 
             <input type="number" value="${day.dayNumber}" min="1" max="31" 
@@ -457,6 +475,7 @@ function renderWorkspace(searchQuery = '') {
           <input type="date" class="day-date-picker" value="${day.date}" 
             onchange="updateDayDate('${day.id}', this.value)"
           />
+          ${syncBadgeHtml}
         </div>
         <div class="day-actions">
           <div class="day-subtotal">₹${dayTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
@@ -613,6 +632,7 @@ function updateDayNumber(dayId, newVal) {
   if (!day) return;
   const num = parseInt(newVal) || 1;
   day.dayNumber = num;
+  day.syncStatus = 'pending';
   saveState();
   renderAll(); // Renders all to update serial indices reactively
 }
@@ -621,6 +641,7 @@ function updateDayDate(dayId, newVal) {
   const day = findDay(dayId);
   if (!day) return;
   day.date = newVal;
+  day.syncStatus = 'pending';
   saveState();
   renderAll();
 }
@@ -638,6 +659,7 @@ function updateExpenseField(dayId, expId, field, value) {
     expense.name = value;
   }
 
+  day.syncStatus = 'pending';
   // Save silently to DB, update totals in place for high density speed
   saveState();
   updateLiveTotals();
@@ -802,6 +824,7 @@ async function uploadVoucher(dayId, expId, file) {
       // Save metadata in active state
       const day = findDay(dayId);
       if (day) {
+        day.syncStatus = 'pending';
         const exp = day.expenses.find(item => item.id === expId);
         if (exp) {
           // EXCLUSIVE MOBILE RENAMING: auto renaming file to expense1, expense2, expense3 based on position index
@@ -839,6 +862,7 @@ async function removeVoucher(dayId, expId) {
 
     const day = findDay(dayId);
     if (day) {
+      day.syncStatus = 'pending';
       const exp = day.expenses.find(item => item.id === expId);
       if (exp) {
         exp.voucherId = null;
@@ -953,6 +977,7 @@ async function deleteExpense(dayId, expId) {
     }
     
     day.expenses.splice(idx, 1);
+    day.syncStatus = 'pending';
     await saveState();
     renderAll();
     showToast('Expense item row deleted.');
@@ -1323,6 +1348,7 @@ async function handleGoToDateSubmit(e) {
     id: `day-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     dayNumber: dayNum,
     date: selectedDateStr,
+    syncStatus: 'pending',
     expenses: []
   };
 
@@ -1351,4 +1377,74 @@ async function handleGoToDateSubmit(e) {
   }, 200);
 
   showToast(`Created Day ${dayNum} sheet successfully!`, 'success');
+}
+
+// =========================================================================
+// 🔄 DAY-WISE OFFLINE DELTA SYNC ENGINE
+// =========================================================================
+
+async function syncLocalDaysToCloud() {
+  if (!navigator.onLine) {
+    showToast("Sync Failed: Device is currently offline.", "error");
+    return;
+  }
+  
+  const currentMonthKey = state.selectedMonth;
+  const currentMonth = state.months[currentMonthKey];
+  if (!currentMonth) return;
+
+  // 1. Isolate pending/failed day cards
+  const unSyncedDays = currentMonth.days.filter(
+    d => d.syncStatus === 'pending' || d.syncStatus === 'failed'
+  );
+
+  if (unSyncedDays.length === 0) {
+    showToast("All logged days are already synced to the cloud!", "success");
+    return;
+  }
+
+  showToast(`Syncing ${unSyncedDays.length} days...`, 'info');
+
+  for (const day of unSyncedDays) {
+    try {
+      // 2. Gather base64 vouchers for this day from IndexedDB
+      const dayVouchers = {};
+      for (const exp of day.expenses) {
+        if (exp.voucherId) {
+          const base64 = await window.db.getVoucher(exp.voucherId);
+          if (base64) {
+            dayVouchers[exp.voucherId] = base64;
+          }
+        }
+      }
+
+      // 3. Post day package to the Express Server
+      const response = await fetch('/api/sync/day', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          loginId: sessionStorage.getItem('emyxpnse_login_id') || 'local_user',
+          monthKey: currentMonthKey,
+          dayData: day,
+          vouchers: dayVouchers
+        })
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        day.syncStatus = 'synced'; // Mark as synced!
+      } else {
+        day.syncStatus = 'failed';
+      }
+    } catch (err) {
+      console.error(`Failed to push Day ${day.dayNumber}:`, err);
+      day.syncStatus = 'failed';
+    }
+  }
+
+  // 4. Save statuses to local IndexedDB and refresh layout!
+  await saveState();
+  renderAll();
+  showToast("Sync cycle complete!", "success");
 }

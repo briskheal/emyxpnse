@@ -1,0 +1,16 @@
+{
+  "short_name": "EmyXpnse",
+  "name": "EmyXpnse Corporate Expense Tracker",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3251/3251383.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/index.html",
+  "background_color": "#0c1222",
+  "theme_color": "#6366f1",
+  "display": "standalone",
+  "orientation": "portrait"
+}

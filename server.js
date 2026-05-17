@@ -274,6 +274,107 @@ app.post('/api/ledger/day/save', async (req, res) => {
   }
 });
 
+// REST API — Progressive Web App Day-Wise Offline Delta-Sync Receiver
+app.post('/api/sync/day', async (req, res) => {
+  if (!dbEnabled) {
+    // Offline sandbox mode response
+    return res.json({ success: true, message: 'Sync simulated: running in offline sandbox.' });
+  }
+
+  const transaction = await db.sequelize.transaction();
+  try {
+    const { loginId, monthKey, dayData, vouchers } = req.body;
+
+    if (!dayData || !dayData.id) {
+      return res.status(400).json({ success: false, error: 'Incomplete day data payload.' });
+    }
+
+    const { id, dayNumber, date, expenses } = dayData;
+
+    // 1. Upsert parent ExpenseDay card
+    await db.ExpenseDay.upsert({
+      id: id,
+      selectedMonth: monthKey,
+      dayNumber: parseInt(dayNumber) || 1,
+      date: date
+    }, { transaction });
+
+    // 2. Synchronize child expense items and their base64 vouchers
+    if (expenses && expenses.length > 0) {
+      for (const item of expenses) {
+        // Retrieve base64 voucher attachment if exists in payload
+        const voucherData = item.voucherId ? (vouchers[item.voucherId] || null) : null;
+
+        await db.ExpenseItem.upsert({
+          id: item.id,
+          dayId: id,
+          name: item.name,
+          amount: item.amount,
+          voucherId: item.voucherId,
+          voucherName: item.voucherName,
+          voucherType: item.voucherType,
+          voucherSize: item.voucherSize,
+          voucherData: voucherData, // Base64 string successfully synced!
+          auditStatus: item.auditStatus || 'pending',
+          adminComment: item.adminComment || ''
+        }, { transaction });
+      }
+    }
+
+    await transaction.commit();
+
+    // Trigger a backup compilation on sync
+    try {
+      const fs = require('fs');
+      const backupsDir = path.join(__dirname, 'backups');
+      if (!fs.existsSync(backupsDir)) {
+        fs.mkdirSync(backupsDir);
+      }
+
+      const allDays = await db.ExpenseDay.findAll({
+        where: { selectedMonth: monthKey },
+        include: [{ model: db.ExpenseItem, as: 'expenses' }],
+        order: [
+          ['dayNumber', 'ASC'],
+          [{ model: db.ExpenseItem, as: 'expenses' }, 'createdAt', 'ASC']
+        ]
+      });
+
+      let csvContent = '\uFEFF';
+      csvContent += 'Serial No,Date,Expense Description,Amount (INR),Receipt Filename,Audit Status,Auditor Remarks\r\n';
+
+      allDays.forEach(day => {
+        if (day.expenses) {
+          day.expenses.forEach((exp, idx) => {
+            const serial = `"${day.dayNumber}.${idx + 1}"`;
+            const dateStr = `"${day.date}"`;
+            const name = `"${(exp.name || '').replace(/"/g, '""')}"`;
+            const amt = `"${(parseFloat(exp.amount) || 0).toFixed(2)}"`;
+            const voucherName = `"${(exp.voucherName || 'None').replace(/"/g, '""')}"`;
+            const status = `"${(exp.auditStatus || 'pending').toUpperCase()}"`;
+            const comment = `"${(exp.adminComment || '').replace(/"/g, '""')}"`;
+
+            csvContent += `${serial},${dateStr},${name},${amt},${voucherName},${status},${comment}\r\n`;
+          });
+        }
+      });
+
+      const backupFilename = `emyxpnse_backup_${monthKey}.csv`;
+      fs.writeFileSync(path.join(backupsDir, backupFilename), csvContent, 'utf8');
+      console.log(`💾 [AUTO BACKUP SUCCESS]: Sync Monthly CSV backup written to ${backupFilename}`);
+    } catch (csvErr) {
+      console.error('CSV backup sync failed:', csvErr);
+    }
+
+    res.json({ success: true, message: `Day ${dayNumber} synced successfully.` });
+  } catch (err) {
+    await transaction.rollback();
+    console.error('Day-wise Sync error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+
 // REST API — Delete Day card and cascade delete all rows
 app.delete('/api/ledger/day/:id', async (req, res) => {
   if (!dbEnabled) {

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>EmyXpnse - User Portal (Mobile Only)</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
   <style>
     /* User Portal Branding Colors override to Purple theme */
     .brand-logo {
@@ -52,6 +53,9 @@
           </button>
           <button class="dropdown-item" id="btnChangePassword" style="width: 100%; text-align: left; background: transparent; border: none; padding: 10px 12px; color: var(--text-primary); font-family: var(--font-brand); font-size: 0.8rem; font-weight: 600; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
             🔑 Password
+          </button>
+          <button class="dropdown-item" id="btnSyncCloud" style="width: 100%; text-align: left; background: transparent; border: none; padding: 10px 12px; color: var(--color-emerald); font-family: var(--font-brand); font-size: 0.8rem; font-weight: 700; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+            🔄 Sync Cloud
           </button>
           <div style="height: 1px; background: rgba(255,255,255,0.08); margin: 4px 0;"></div>
           <button class="dropdown-item" id="btnLogout" style="width: 100%; text-align: left; background: transparent; border: none; padding: 10px 12px; color: #f87171; font-family: var(--font-brand); font-size: 0.8rem; font-weight: 600; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
@@ -230,5 +234,14 @@
   <!-- Scripts -->
   <script src="db.js"></script>
   <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then((reg) => console.log('PWA Service Worker registered successfully:', reg.scope))
+          .catch((err) => console.warn('PWA Service Worker registration failed:', err));
+      });
+    }
+  </script>
 </body>
 </html>
