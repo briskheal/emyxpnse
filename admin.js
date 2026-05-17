@@ -223,6 +223,48 @@ async function populateEmployeeFilterDropdown() {
   empSelector.value = previousVal || "";
 }
 
+// Bulk save and synchronize all audited modifications, comments, and status changes
+async function saveAllAuditedProgress() {
+  showToast('Saving and synchronizing audit progress to local database...', 'info');
+  try {
+    await saveState();
+    
+    // If online, bulk-synchronize comments, amounts, descriptions, and audit statuses to PostgreSQL
+    if (navigator.onLine) {
+      showToast('Syncing all audited comments & statuses with Supabase...', 'info');
+      const currentMonth = state.months[state.selectedMonth];
+      if (currentMonth && currentMonth.days) {
+        let updateCount = 0;
+        for (const day of currentMonth.days) {
+          for (const exp of day.expenses) {
+            try {
+              await fetch(`/api/ledger/item/${exp.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  auditStatus: exp.auditStatus || 'pending',
+                  adminComment: exp.adminComment || '',
+                  amount: parseFloat(exp.amount) || 0,
+                  name: exp.name || ''
+                })
+              });
+              updateCount++;
+            } catch (err) {
+              console.error(`Failed to bulk sync item ${exp.id}:`, err);
+            }
+          }
+        }
+        showToast(`Audit sync complete! ${updateCount} rows saved to database.`, 'success');
+      }
+    } else {
+      showToast('Saved locally. Connect to internet to sync with cloud database.', 'warning');
+    }
+  } catch (err) {
+    console.error(err);
+    showToast('Failed to save audit data.', 'error');
+  }
+}
+
 // Bind admin-focused interaction controls
 function bindAdminEvents() {
   // Selector switch
@@ -264,6 +306,13 @@ function bindAdminEvents() {
   if (btnGenerateMock) {
     btnGenerateMock.addEventListener('click', () => {
       generateMockLedger();
+    });
+  }
+
+  const btnSaveAll = document.getElementById('btnSaveAll');
+  if (btnSaveAll) {
+    btnSaveAll.addEventListener('click', async () => {
+      await saveAllAuditedProgress();
     });
   }
 
