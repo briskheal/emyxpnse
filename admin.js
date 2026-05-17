@@ -152,15 +152,21 @@ function bindAdminEvents() {
     addNewDay();
   });
 
-  document.getElementById('btnResetDB').addEventListener('click', () => {
-    if (confirm('Delete the active ledger grid completely?')) {
-      resetActiveLedger();
-    }
-  });
+  const btnResetDB = document.getElementById('btnResetDB');
+  if (btnResetDB) {
+    btnResetDB.addEventListener('click', () => {
+      if (confirm('Delete the active ledger grid completely?')) {
+        resetActiveLedger();
+      }
+    });
+  }
 
-  document.getElementById('btnGenerateMock').addEventListener('click', () => {
-    generateMockLedger();
-  });
+  const btnGenerateMock = document.getElementById('btnGenerateMock');
+  if (btnGenerateMock) {
+    btnGenerateMock.addEventListener('click', () => {
+      generateMockLedger();
+    });
+  }
 
   document.getElementById('btnExportCSV').addEventListener('click', () => {
     exportAuditedCSV();
