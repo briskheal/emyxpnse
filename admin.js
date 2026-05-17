@@ -797,6 +797,21 @@ async function deleteExpense(dayId, expId) {
     }
     
     day.expenses.splice(idx, 1);
+
+    // If online, securely delete the expense item row permanently from the Supabase PostgreSQL cloud database!
+    if (navigator.onLine) {
+      try {
+        const response = await fetch(`/api/ledger/item/${expId}`, {
+          method: 'DELETE'
+        });
+        const resJson = await response.json();
+        if (response.ok && resJson.success) {
+          console.log(`Cloud database: Deleted expense row ${expId} permanently.`);
+        }
+      } catch (netErr) {
+        console.error('Failed to delete expense row on cloud database:', netErr);
+      }
+    }
     
     // Save state and re-render everything
     await saveState();
@@ -1054,24 +1069,7 @@ async function deleteDay(dayId) {
   }
 }
 
-// Delete row
-async function deleteExpense(dayId, expId) {
-  const day = findDay(dayId);
-  if (!day) return;
-
-  const idx = day.expenses.findIndex(e => e.id === expId);
-  if (idx !== -1) {
-    const exp = day.expenses[idx];
-    if (exp.voucherId) {
-      await window.db.deleteVoucher(exp.voucherId);
-    }
-    
-    day.expenses.splice(idx, 1);
-    await saveState();
-    renderAll();
-    showToast('Expense row deleted.');
-  }
-}
+// Note: deleteExpense is defined above at line 782 and bound globally.
 
 // Export final Compiled Audit CSV (Including audit status verification and remarks!)
 function exportAuditedCSV() {
