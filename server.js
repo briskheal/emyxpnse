@@ -201,6 +201,11 @@ app.post('/api/ledger/day/save', async (req, res) => {
     // 2. Synchronize child expense items
     if (expenses && expenses.length > 0) {
       for (const item of expenses) {
+        // Look up existing item to preserve auditor's comments and approval statuses
+        const existingItem = await db.ExpenseItem.findByPk(item.id);
+        const finalStatus = item.auditStatus || (existingItem ? existingItem.auditStatus : 'pending');
+        const finalComment = item.adminComment || (existingItem ? existingItem.adminComment : '');
+
         await db.ExpenseItem.upsert({
           id: item.id,
           dayId: id,
@@ -211,8 +216,8 @@ app.post('/api/ledger/day/save', async (req, res) => {
           voucherType: item.voucherType,
           voucherSize: item.voucherSize,
           voucherData: item.voucherData, // base64 string
-          auditStatus: item.auditStatus,
-          adminComment: item.adminComment
+          auditStatus: finalStatus,
+          adminComment: finalComment
         }, { transaction });
       }
     }
@@ -305,6 +310,11 @@ app.post('/api/sync/day', async (req, res) => {
         // Retrieve base64 voucher attachment if exists in payload
         const voucherData = item.voucherId ? (vouchers[item.voucherId] || null) : null;
 
+        // Look up existing item to preserve auditor's comments and approval statuses on mobile sync override
+        const existingItem = await db.ExpenseItem.findByPk(item.id);
+        const finalStatus = item.auditStatus || (existingItem ? existingItem.auditStatus : 'pending');
+        const finalComment = item.adminComment || (existingItem ? existingItem.adminComment : '');
+
         await db.ExpenseItem.upsert({
           id: item.id,
           dayId: id,
@@ -315,8 +325,8 @@ app.post('/api/sync/day', async (req, res) => {
           voucherType: item.voucherType,
           voucherSize: item.voucherSize,
           voucherData: voucherData, // Base64 string successfully synced!
-          auditStatus: item.auditStatus || 'pending',
-          adminComment: item.adminComment || ''
+          auditStatus: finalStatus,
+          adminComment: finalComment
         }, { transaction });
       }
     }
