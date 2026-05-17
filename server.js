@@ -116,7 +116,7 @@ app.get('/api/users', async (req, res) => {
 
   try {
     const users = await db.User.findAll({ 
-      attributes: ['id', 'loginId', 'password', 'role', 'createdAt'],
+      attributes: ['id', 'loginId', 'password', 'role', 'lastActiveAt', 'createdAt'],
       order: [['createdAt', 'DESC']] 
     });
     res.json({ success: true, users });
@@ -441,15 +441,18 @@ if (dbEnabled) {
   db.sequelize.sync({ alter: true }).then(async () => {
     console.log('✅ PostgreSQL Supabase Models synchronized successfully.');
     
-    // Seed default credentials if admin/user accounts don't exist!
+    // Seed default credentials robustly:
     try {
-      const adminExists = await db.User.findOne({ where: { loginId: 'admin' } });
-      if (!adminExists) {
+      // 1. If there is no administrator in the entire database, seed the default admin!
+      const adminCount = await db.User.count({ where: { role: 'admin' } });
+      if (adminCount === 0) {
         await db.User.create({ loginId: 'admin', password: 'EMYXPNSE@2026', role: 'admin' });
         console.log('🌱 [SEED SUCCESS]: Created default auditor: admin / EMYXPNSE@2026');
       }
-      const userExists = await db.User.findOne({ where: { loginId: 'user' } });
-      if (!userExists) {
+
+      // 2. If the database is completely empty of standard employees, seed the default user!
+      const standardUserCount = await db.User.count({ where: { role: 'user' } });
+      if (standardUserCount === 0) {
         await db.User.create({ loginId: 'user', password: 'EMYXPNSE@2026', role: 'user' });
         console.log('🌱 [SEED SUCCESS]: Created default employee: user / EMYXPNSE@2026');
       }
