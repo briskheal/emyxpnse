@@ -5,6 +5,17 @@
  * camera-friendly inputs, sequential mobile auto-renaming, and print exports.
  */
 
+// Global Safe HTML Escaper Utility
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 // Application Master State
 let state = {
   selectedMonth: '', // format YYYY-MM
@@ -1196,7 +1207,7 @@ async function exportToCSV() {
   const empCode = currentUser.empCode || 'N/A';
 
   let csvContent = '\uFEFF'; // UTF-8 BOM
-  csvContent += 'Serial No,Date,Employee Code,Employee Name,Expense Description,Amount (INR),Renamed Receipt Filename\r\n';
+  csvContent += 'Serial No,Date,Employee Code,Employee Name,Expense Description,Amount (INR),Receipt Filename,APRV (Y/N),Auditor Remarks\r\n';
 
   currentMonth.days.forEach(day => {
     day.expenses.forEach((exp, idx) => {
@@ -1208,7 +1219,16 @@ async function exportToCSV() {
       const amt = `"${(parseFloat(exp.amount) || 0).toFixed(2)}"`;
       const voucherName = `"${String(exp.voucherName || 'None').replace(/"/g, '""')}"`;
 
-      csvContent += `${serial},${date},${code},${nameCol},${name},${amt},${voucherName}\r\n`;
+      // Map auditStatus to APRV (Y/N)
+      const statusVal = (exp.auditStatus || 'pending').toLowerCase();
+      let aprvStatus = 'PENDING';
+      if (statusVal === 'approved') aprvStatus = 'Y';
+      else if (statusVal === 'flagged') aprvStatus = 'N';
+      const aprv = `"${aprvStatus}"`;
+
+      const comment = `"${String(exp.adminComment || '').replace(/"/g, '""')}"`;
+
+      csvContent += `${serial},${date},${code},${nameCol},${name},${amt},${voucherName},${aprv},${comment}\r\n`;
     });
   });
 

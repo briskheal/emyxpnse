@@ -5,6 +5,17 @@
  * real-time row color status tracking, inline cell remarks, and final sign-offs.
  */
 
+// Global Safe HTML Escaper Utility
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 // Master State Object
 let state = {
   selectedMonth: '',
@@ -1217,7 +1228,7 @@ async function exportAuditedCSV(isAutoBackup = false) {
   }
 
   let csvContent = '\uFEFF'; // UTF-8 BOM
-  csvContent += 'Serial No,Date,Employee Code,Employee Name,Expense Description,Amount (INR),Receipt Filename,Audit Status,Auditor Remarks\r\n';
+  csvContent += 'Serial No,Date,Employee Code,Employee Name,Expense Description,Amount (INR),Receipt Filename,APRV (Y/N),Auditor Remarks\r\n';
 
   filteredDays.forEach(day => {
     // Resolve employee details dynamically
@@ -1231,10 +1242,17 @@ async function exportAuditedCSV(isAutoBackup = false) {
       const name = `"${String(exp.name || '').replace(/"/g, '""')}"`;
       const amt = `"${(parseFloat(exp.amount) || 0).toFixed(2)}"`;
       const voucherName = `"${String(exp.voucherName || 'None').replace(/"/g, '""')}"`;
-      const status = `"${String(exp.auditStatus || 'pending').toUpperCase()}"`;
+
+      // Map auditStatus to APRV (Y/N)
+      const statusVal = (exp.auditStatus || 'pending').toLowerCase();
+      let aprvStatus = 'PENDING';
+      if (statusVal === 'approved') aprvStatus = 'Y';
+      else if (statusVal === 'flagged') aprvStatus = 'N';
+      const aprv = `"${aprvStatus}"`;
+
       const comment = `"${String(exp.adminComment || '').replace(/"/g, '""')}"`;
 
-      csvContent += `${serial},${date},${empCode},${empName},${name},${amt},${voucherName},${status},${comment}\r\n`;
+      csvContent += `${serial},${date},${empCode},${empName},${name},${amt},${voucherName},${aprv},${comment}\r\n`;
     });
   });
 
