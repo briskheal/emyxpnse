@@ -333,7 +333,7 @@ app.post('/api/sync/day', async (req, res) => {
           id: item.id,
           dayId: id,
           name: item.name,
-          amount: item.amount,
+          amount: parseFloat(item.amount) || 0.00,
           voucherId: item.voucherId,
           voucherName: item.voucherName,
           voucherType: item.voucherType,

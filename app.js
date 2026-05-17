@@ -202,15 +202,6 @@ function bindEventListeners() {
     logoutBtn.addEventListener('click', async () => {
       showToast('Saving active drafts securely...', 'info');
       await saveState();
-
-      // AUTOMATED DATA PROTECTION BACKUP:
-      // Instantly generate and trigger a local download of the active month's CSV backup!
-      try {
-        exportToCSV();
-      } catch (err) {
-        console.error('Auto CSV export failed on logout:', err);
-      }
-
       showToast('Logged out successfully.', 'success');
       setTimeout(() => {
         location.href = 'index.html';
@@ -324,7 +315,7 @@ function addNewDay() {
   const defaultDateStr = `${year}-${month}-${String(targetDay).padStart(2, '0')}`;
 
   const newDay = {
-    id: `day-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    id: generateUUID(),
     dayNumber: nextDayNum,
     date: defaultDateStr,
     syncStatus: 'pending',
@@ -354,7 +345,7 @@ function addExpenseItem(dayId) {
   if (!day) return;
 
   const newItem = {
-    id: `exp-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    id: generateUUID(),
     name: '',
     amount: 0,
     voucherId: null,
@@ -492,10 +483,12 @@ function renderWorkspace(searchQuery = '') {
         <!-- Item rows render dynamically -->
       </div>
 
-      <div class="day-card-footer">
-        <button class="btn btn-success" onclick="addExpenseItem('${day.id}')" style="width:100%; justify-content:center;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          Add Expense Detail
+      <div class="day-card-footer" style="display: flex; gap: 10px; padding: 12px 16px;">
+        <button class="btn btn-success" onclick="addExpenseItem('${day.id}')" style="flex: 1; justify-content:center; padding: 10px 14px; font-size: 0.85rem; font-weight: 700; height: 42px;">
+          ➕ Add Row Detail
+        </button>
+        <button class="btn btn-primary" onclick="syncSingleDay('${day.id}')" style="flex: 1; justify-content:center; padding: 10px 14px; font-size: 0.85rem; font-weight: 700; height: 42px; background: var(--color-indigo); border-color: rgba(99,102,241,0.35);">
+          💾 Save & Sync Day
         </button>
       </div>
     `;
@@ -1369,7 +1362,7 @@ async function handleGoToDateSubmit(e) {
   // 2. If it does not exist, let's create a new card chronologically!
   const dayNum = parseInt(selectedDateStr.split('-')[2], 10);
   const newDay = {
-    id: `day-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    id: generateUUID(),
     dayNumber: dayNum,
     date: selectedDateStr,
     syncStatus: 'pending',
@@ -1471,4 +1464,71 @@ async function syncLocalDaysToCloud() {
   await saveState();
   renderAll();
   showToast("Sync cycle complete!", "success");
+}
+
+// Helper to generate standard RFC4122 v4 UUID strings in client side PWA
+function generateUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+// Interactive Single-Day Cloud Sync Trigger (dedicated Save option!)
+async function syncSingleDay(dayId) {
+  if (!navigator.onLine) {
+    showToast("Sync Failed: Device is currently offline.", "error");
+    return;
+  }
+
+  const day = findDay(dayId);
+  if (!day) return;
+
+  showToast(`Syncing Day ${day.dayNumber} ledger securely...`, 'info');
+
+  try {
+    // 1. Gather base64 vouchers for this day from IndexedDB
+    const dayVouchers = {};
+    for (const exp of day.expenses) {
+      if (exp.voucherId) {
+        const base64 = await window.db.getVoucher(exp.voucherId);
+        if (base64) {
+          dayVouchers[exp.voucherId] = base64;
+        }
+      }
+    }
+
+    const currentMonthKey = state.selectedMonth;
+
+    // 2. Post day package to the Express Server
+    const response = await fetch('/api/sync/day', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        loginId: sessionStorage.getItem('emyxpnse_login_id') || 'local_user',
+        monthKey: currentMonthKey,
+        dayData: day,
+        vouchers: dayVouchers
+      })
+    });
+
+    const result = await response.json();
+
+    if (response.ok && result.success) {
+      day.syncStatus = 'synced'; // Mark as synced!
+      showToast(`Day ${day.dayNumber} successfully saved to database!`, 'success');
+    } else {
+      day.syncStatus = 'failed';
+      showToast(result.error || `Failed to sync Day ${day.dayNumber}.`, 'error');
+    }
+  } catch (err) {
+    console.error(`Failed to push Day ${day.dayNumber}:`, err);
+    day.syncStatus = 'failed';
+    showToast(`Network sync error for Day ${day.dayNumber}.`, 'error');
+  }
+
+  // 3. Save local IndexedDB state & refresh views in-place!
+  await saveState();
+  renderAll();
 }

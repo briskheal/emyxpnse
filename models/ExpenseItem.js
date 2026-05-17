@@ -1,8 +1,7 @@
 module.exports = (sequelize, DataTypes) => {
   return sequelize.define('ExpenseItem', {
     id: { 
-      type: DataTypes.UUID, 
-      defaultValue: DataTypes.UUIDV4, 
+      type: DataTypes.STRING(100), 
       primaryKey: true 
     },
     name: { 
