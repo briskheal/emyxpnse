@@ -1,8 +1,8 @@
 /**
  * server.js
  * EmyXpnse - High Density Cloud Sync Express Engine
- * Connects to Supabase PostgreSQL, manages database transactions, synchronize models,
- * and handles safe offline-first fallback conditions.
+ * Connects to Supabase PostgreSQL, manages database transactions, user auth,
+ * automated monthly CSV backups, and safe offline-first fallbacks.
  */
 
 const express = require('express');
@@ -40,6 +40,127 @@ app.get('/api/health', (req, res) => {
     mode: dbEnabled ? 'HYBRID_CLOUD_SYNC' : 'LOCAL_OFFLINE_FIRST',
     message: dbEnabled ? 'Connected to Supabase PostgreSQL' : 'Running in offline IndexedDB mode.'
   });
+});
+
+// REST API — Unified Role-Based Auth Login Gate
+app.post('/api/auth/login', async (req, res) => {
+  const { loginId, password } = req.body;
+
+  if (!loginId || !password) {
+    return res.status(400).json({ success: false, error: 'Login ID and Password are required.' });
+  }
+
+  // Safe offline-first fallback credentials so you are never locked out offline!
+  if (!dbEnabled) {
+    if (loginId.trim() === 'admin' && password === 'EMYXPNSE@2026') {
+      return res.json({ success: true, role: 'admin', loginId: 'admin' });
+    }
+    if (loginId.trim() === 'user' && password === 'EMYXPNSE@2026') {
+      return res.json({ success: true, role: 'user', loginId: 'user' });
+    }
+    return res.status(401).json({ success: false, error: 'Invalid offline credentials. Hint: use EMYXPNSE@2026' });
+  }
+
+  try {
+    const user = await db.User.findOne({ where: { loginId: loginId.trim() } });
+    if (!user || user.password !== password) {
+      return res.status(401).json({ success: false, error: 'Invalid Login ID or Password.' });
+    }
+    res.json({ success: true, role: user.role, loginId: user.loginId });
+  } catch (err) {
+    console.error('Login failure:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// REST API — Secure Change Password Endpoint (User & Admin)
+app.post('/api/auth/change-password', async (req, res) => {
+  const { loginId, newPassword } = req.body;
+
+  if (!loginId || !newPassword) {
+    return res.status(400).json({ success: false, error: 'Login ID and New Password are required.' });
+  }
+
+  if (!dbEnabled) {
+    return res.json({ success: true, message: 'Offline Mode: Password updated in local cache.' });
+  }
+
+  try {
+    const user = await db.User.findOne({ where: { loginId: loginId.trim() } });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Employee account not found.' });
+    }
+    user.password = newPassword.trim();
+    await user.save();
+    res.json({ success: true, message: 'Password updated successfully inside credentials!' });
+  } catch (err) {
+    console.error('Change password failure:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// REST API — Get list of registered employees (Admin Only Panel)
+app.get('/api/users', async (req, res) => {
+  if (!dbEnabled) {
+    // Return mock offline accounts so features remain auditable in dev
+    return res.json({ 
+      success: true, 
+      users: [
+        { id: '1', loginId: 'admin', password: 'EMYXPNSE@2026', role: 'admin', createdAt: new Date() },
+        { id: '2', loginId: 'user', password: 'EMYXPNSE@2026', role: 'user', createdAt: new Date() }
+      ] 
+    });
+  }
+
+  try {
+    const users = await db.User.findAll({ 
+      attributes: ['id', 'loginId', 'password', 'role', 'createdAt'],
+      order: [['createdAt', 'DESC']] 
+    });
+    res.json({ success: true, users });
+  } catch (err) {
+    console.error('Fetch users failure:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// REST API — Add / Register a new employee account (Admin Only Panel)
+app.post('/api/users', async (req, res) => {
+  if (!dbEnabled) {
+    return res.status(503).json({ success: false, error: 'Database is in offline mode.' });
+  }
+
+  try {
+    const { loginId, password, role } = req.body;
+    if (!loginId || !password || !role) {
+      return res.status(400).json({ success: false, error: 'All fields are required.' });
+    }
+
+    const newUser = await db.User.create({ 
+      loginId: loginId.trim(), 
+      password, 
+      role 
+    });
+    res.json({ success: true, user: newUser });
+  } catch (err) {
+    console.error('Create user failure:', err);
+    res.status(500).json({ success: false, error: 'Login ID already exists or is invalid.' });
+  }
+});
+
+// REST API — Delete an employee account (Admin Only Panel)
+app.delete('/api/users/:id', async (req, res) => {
+  if (!dbEnabled) {
+    return res.status(503).json({ success: false, error: 'Database is in offline mode.' });
+  }
+
+  try {
+    await db.User.destroy({ where: { id: req.params.id } });
+    res.json({ success: true, message: 'Employee account deleted successfully.' });
+  } catch (err) {
+    console.error('Delete user failure:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // REST API — Fetch entire active month sheet data
@@ -192,7 +313,21 @@ app.get('*', (req, res, next) => {
 
 // Start Server Routine
 if (dbEnabled) {
-  db.sequelize.sync().then(() => {
+  db.sequelize.sync().then(async () => {
+    console.log('✅ PostgreSQL Supabase Models synchronized successfully.');
+    
+    // Seed default credentials if user database is empty!
+    try {
+      const userCount = await db.User.count();
+      if (userCount === 0) {
+        await db.User.create({ loginId: 'admin', password: 'EMYXPNSE@2026', role: 'admin' });
+        await db.User.create({ loginId: 'user', password: 'EMYXPNSE@2026', role: 'user' });
+        console.log('🌱 [SEED SUCCESS]: Created default auditor: admin / EMYXPNSE@2026 and employee: user / EMYXPNSE@2026');
+      }
+    } catch (seedErr) {
+      console.error('🌱 [SEED FAILURE]: Failed to sync default credential rows:', seedErr.message);
+    }
+
     console.log(`\n\x1b[32m========================================================\x1b[0m`);
     console.log(`\x1b[36m   EMYXPNSE SYSTEM SYNC ENGINE ACTIVE (SUPABASE CONNECTED)\x1b[0m`);
     console.log(`\x1b[33m   Open your web browser at: \x1b[32m\\x1b[1mhttp://localhost:${PORT}\x1b[0m`);

@@ -20,6 +20,7 @@ db.sequelize = sequelize;
 // Register sheet models
 db.ExpenseDay = require('./ExpenseDay')(sequelize, DataTypes);
 db.ExpenseItem = require('./ExpenseItem')(sequelize, DataTypes);
+db.User = require('./User')(sequelize, DataTypes);
 
 // Establish clean parent-child foreign key mappings (One Day Card -> Many Expense Detail Rows)
 db.ExpenseDay.hasMany(db.ExpenseItem, { as: 'expenses', foreignKey: 'dayId', onDelete: 'CASCADE' });

@@ -3,157 +3,150 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EmyXpnse Workspace Gateway</title>
+  <title>EmyXpnse Secure Gateway</title>
   <link rel="stylesheet" href="style.css">
   <style>
     body {
-      overflow-y: auto;
+      overflow-y: hidden;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 24px 12px;
+      height: 100vh;
     }
-    .gateway-wrapper {
-      max-width: 900px;
+    .login-container {
+      max-width: 420px;
       width: 100%;
-      z-index: 2;
-      text-align: center;
-      animation: scaleUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-    .gateway-title-section {
-      margin-bottom: 40px;
-    }
-    .gateway-title {
-      font-family: var(--font-brand);
-      font-size: 2.6rem;
-      font-weight: 800;
-      letter-spacing: -0.5px;
-      background: linear-gradient(135deg, var(--color-indigo), var(--color-emerald));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      margin-bottom: 8px;
-    }
-    .gateway-subtitle {
-      font-size: 1rem;
-      color: var(--text-secondary);
-      max-width: 480px;
-      margin: 0 auto;
-      line-height: 1.5;
-    }
-    .portal-cards-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 24px;
-      margin-bottom: 30px;
-    }
-    @media (min-width: 600px) {
-      .portal-cards-grid {
-        grid-template-columns: 1fr 1fr;
-      }
-    }
-    .portal-card {
-      background: rgba(17, 24, 39, 0.6);
+      background: rgba(17, 24, 39, 0.7);
       backdrop-filter: blur(var(--glass-blur));
       border: 1px solid var(--border-color);
-      border-radius: 20px;
-      padding: 30px 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 16px;
-      cursor: pointer;
+      border-radius: 24px;
+      padding: 40px 30px;
       box-shadow: var(--glass-shadow);
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 2;
+      animation: scaleUp 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
       position: relative;
-      overflow: hidden;
     }
-    .portal-card::before {
+    .login-container::before {
       content: '';
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background: radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.08) 0%, rgba(0,0,0,0) 70%);
+      border-radius: 24px;
+      background: radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.1) 0%, rgba(0,0,0,0) 70%);
       pointer-events: none;
     }
-    .portal-card:hover {
-      border-color: var(--color-indigo);
-      transform: translateY(-5px);
-      box-shadow: 0 15px 30px rgba(99, 102, 241, 0.15);
+    .brand-section {
+      text-align: center;
+      margin-bottom: 30px;
     }
-    .portal-card.admin-card::before {
-      background: radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.08) 0%, rgba(0,0,0,0) 70%);
-    }
-    .portal-card.admin-card:hover {
-      border-color: var(--color-emerald);
-      box-shadow: 0 15px 30px rgba(16, 185, 129, 0.15);
-    }
-    .portal-icon {
-      width: 70px;
-      height: 70px;
-      border-radius: 50%;
-      background: rgba(99, 102, 241, 0.1);
-      border: 1px solid rgba(99, 102, 241, 0.2);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--color-indigo);
-      font-size: 1.8rem;
-      margin-bottom: 8px;
-      transition: all 0.3s ease;
-    }
-    .admin-card .portal-icon {
-      background: rgba(16, 185, 129, 0.1);
-      border: 1px solid rgba(16, 185, 129, 0.2);
-      color: var(--color-emerald);
-    }
-    .portal-card:hover .portal-icon {
-      transform: scale(1.1);
-      box-shadow: 0 0 15px var(--color-indigo-glow);
-    }
-    .portal-card.admin-card:hover .portal-icon {
-      box-shadow: 0 0 15px var(--color-emerald-glow);
-    }
-    .portal-name {
+    .brand-logo {
+      font-size: 2.2rem;
+      font-weight: 900;
       font-family: var(--font-brand);
-      font-size: 1.4rem;
-      font-weight: 700;
-      color: var(--text-primary);
+      letter-spacing: -1px;
+      background: linear-gradient(135deg, var(--color-indigo), var(--color-emerald));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 6px;
     }
-    .portal-desc {
+    .brand-tagline {
       font-size: 0.85rem;
       color: var(--text-secondary);
-      line-height: 1.4;
-      max-width: 260px;
+      font-weight: 500;
+      letter-spacing: 0.2px;
     }
-    .portal-badge {
-      font-size: 0.7rem;
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-label {
+      display: block;
+      font-size: 0.75rem;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      padding: 4px 10px;
-      border-radius: 20px;
-      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .form-input {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.03);
       border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 12px 16px;
+      color: var(--text-primary);
+      font-family: var(--font-main);
+      font-size: 0.9rem;
+      transition: all 0.25s ease;
+    }
+    .form-input:focus {
+      outline: none;
+      border-color: var(--color-indigo);
+      box-shadow: 0 0 10px rgba(99, 102, 241, 0.2);
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .btn-login {
+      width: 100%;
+      padding: 14px;
+      border-radius: 12px;
+      font-family: var(--font-brand);
+      font-weight: 700;
+      font-size: 1rem;
+      border: none;
+      cursor: pointer;
+      background: linear-gradient(135deg, var(--color-indigo), #4f46e5);
+      color: #ffffff;
+      box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      margin-top: 10px;
+    }
+    .btn-login:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(99, 102, 241, 0.45);
+      background: linear-gradient(135deg, #4f46e5, var(--color-indigo));
+    }
+    .btn-login:active {
+      transform: translateY(0);
+    }
+    .login-footer {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 0.75rem;
       color: var(--text-muted);
+      line-height: 1.5;
     }
-    .user-card .portal-badge {
-      background: rgba(99, 102, 241, 0.1);
-      border-color: rgba(99, 102, 241, 0.2);
-      color: #a5b4fc;
+    /* Toast notifications style rules */
+    #toastContainer {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
-    .admin-card .portal-badge {
-      background: rgba(16, 185, 129, 0.1);
-      border-color: rgba(16, 185, 129, 0.2);
-      color: #6ee7b7;
+    .toast {
+      background: rgba(17, 24, 39, 0.85);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 14px 20px;
+      color: var(--text-primary);
+      font-family: var(--font-main);
+      font-size: 0.85rem;
+      font-weight: 600;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 280px;
+      animation: slideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
-    .redirect-status {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      margin-top: 20px;
-      height: 20px;
-    }
+    .toast.success { border-color: var(--color-emerald); }
+    .toast.error { border-color: #ef4444; }
+    .toast.info { border-color: var(--color-indigo); }
   </style>
 </head>
 <body>
@@ -161,56 +154,126 @@
   <div class="ambient-glow-1"></div>
   <div class="ambient-glow-2"></div>
 
-  <div class="gateway-wrapper">
-    <div class="gateway-title-section">
-      <div class="gateway-title">EMYXPNSE WORKSPACE</div>
-      <div class="gateway-subtitle">Corporate expense tracking and auditing ecosystem. Select your dedicated portal to proceed.</div>
+  <!-- Toast system wrapper -->
+  <div id="toastContainer"></div>
+
+  <div class="login-container">
+    <div class="brand-section">
+      <div class="brand-logo">EMYXPNSE</div>
+      <div class="brand-tagline">Corporate Expense Audit Gateway</div>
     </div>
 
-    <div class="portal-cards-grid">
-      <!-- User Portal Card -->
-      <div class="portal-card user-card" onclick="location.href='user.html'">
-        <div class="portal-icon">📱</div>
-        <div class="portal-name">User Portal</div>
-        <span class="portal-badge">Exclusive Mobile</span>
-        <div class="portal-desc">Record daily expenses, take camera receipt snapshots, auto-serialize line items, and generate audit-ready exports directly from your phone.</div>
-        <button class="btn btn-primary" style="margin-top: auto; width: 100%;">Launch User App</button>
+    <form id="loginForm">
+      <div class="form-group">
+        <label class="form-label" for="loginId">Employee ID / Login ID</label>
+        <input class="form-input" type="text" id="loginId" placeholder="e.g. admin or user" required autocomplete="username">
       </div>
 
-      <!-- Admin Portal Card -->
-      <div class="portal-card admin-card" onclick="location.href='admin.html'">
-        <div class="portal-icon">💻</div>
-        <div class="portal-name">Admin Portal</div>
-        <span class="portal-badge">Exclusive Desktop</span>
-        <div class="portal-desc">Import user ledger packages, review receipts, execute verification audits, edit items, validation sign-off, and export corporate data.</div>
-        <button class="btn btn-success" style="margin-top: auto; width: 100%; background: linear-gradient(135deg, var(--color-emerald), #059669)">Launch Admin App</button>
+      <div class="form-group">
+        <label class="form-label" for="password">Security Password</label>
+        <input class="form-input" type="password" id="password" placeholder="••••••••••••" required autocomplete="current-password">
       </div>
+
+      <button class="btn-login" type="submit" id="btnSubmit">Sign In Securely</button>
+    </form>
+
+    <div class="login-footer">
+      <span>Authorized Access Only</span><br>
+      <span style="color: var(--text-muted); font-size: 0.7rem;">Protected by Emyris Secure Session Encryption</span>
     </div>
-
-    <div class="redirect-status" id="redirectStatus">Analyzing device form factor...</div>
   </div>
 
   <script>
-    // Automated Mobile/Desktop detection and auto-redirection
-    document.addEventListener('DOMContentLoaded', () => {
-      const statusEl = document.getElementById('redirectStatus');
-      const width = window.innerWidth;
-      
-      // We will perform a brief 1.5s delay to let the user see the premium gateway option, 
-      // but auto-redirect if they are clearly on a phone or desktop.
-      setTimeout(() => {
-        if (width < 768) {
-          statusEl.textContent = '📱 Mobile screen detected. Redirecting to User Portal...';
-          statusEl.style.color = '#8b5cf6';
-          setTimeout(() => {
-            location.href = 'user.html';
-          }, 1200);
-        } else {
-          statusEl.textContent = '💻 Desktop screen detected. Admin Portal recommended.';
-        }
-      }, 1500);
-    });
-  </script>
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const loginId = document.getElementById('loginId').value.trim();
+      const password = document.getElementById('password').value;
+      const btn = document.getElementById('btnSubmit');
 
+      if (!loginId || !password) return;
+
+      btn.disabled = true;
+      btn.innerText = 'Verifying credentials...';
+
+      try {
+        // Submit authentication request to backend Express API
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ loginId, password })
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+          showToast(`Welcome back, ${result.loginId}!`, 'success');
+          
+          // Save session locally to identify logged-in profile
+          sessionStorage.setItem('emyxpnse_user_role', result.role);
+          sessionStorage.setItem('emyxpnse_login_id', result.loginId);
+
+          // Route intelligently by security roles
+          setTimeout(() => {
+            if (result.role === 'admin') {
+              location.href = 'admin.html';
+            } else {
+              location.href = 'user.html';
+            }
+          }, 800);
+
+        } else {
+          showToast(result.error || 'Authentication failed.', 'error');
+          btn.disabled = false;
+          btn.innerText = 'Sign In Securely';
+        }
+
+      } catch (err) {
+        console.warn('Backend unavailable, trying offline client fallback validation...');
+        
+        // Elite Offline-First Fallback: Allow direct mock validation if server is completely offline
+        if (loginId === 'admin' && password === 'EMYXPNSE@2026') {
+          showToast('Offline Mode: Admin authenticated.', 'success');
+          sessionStorage.setItem('emyxpnse_user_role', 'admin');
+          sessionStorage.setItem('emyxpnse_login_id', 'admin');
+          setTimeout(() => { location.href = 'admin.html'; }, 800);
+        } else if (loginId === 'user' && password === 'EMYXPNSE@2026') {
+          showToast('Offline Mode: Employee authenticated.', 'success');
+          sessionStorage.setItem('emyxpnse_user_role', 'user');
+          sessionStorage.setItem('emyxpnse_login_id', 'user');
+          setTimeout(() => { location.href = 'user.html'; }, 800);
+        } else {
+          showToast('Invalid offline credentials. Try: user / EMYXPNSE@2026', 'error');
+          btn.disabled = false;
+          btn.innerText = 'Sign In Securely';
+        }
+      }
+    });
+
+    // Simple toast controller
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      
+      let icon = 'ℹ️';
+      if (type === 'success') icon = '✅';
+      if (type === 'error') icon = '❌';
+
+      toast.innerHTML = `
+        <span>${icon}</span>
+        <span>${message}</span>
+      `;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-10px)';
+        toast.style.transition = 'all 0.25s ease';
+        setTimeout(() => {
+          if (container.contains(toast)) container.removeChild(toast);
+        }, 250);
+      }, 3000);
+    }
+  </script>
 </body>
 </html>

@@ -23,6 +23,23 @@ const MOCK_CATEGORIES = [
 
 // Initialize on DOM load
 document.addEventListener('DOMContentLoaded', async () => {
+  // SECURITY GATE: Verify auditor credentials
+  const userRole = sessionStorage.getItem('emyxpnse_user_role');
+  if (userRole !== 'admin') {
+    document.body.innerHTML = `
+      <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:#05070c; color:#cbd5e1; font-family:sans-serif; text-align:center;">
+        <span style="font-size:3rem; margin-bottom:15px;">❌</span>
+        <h2 style="margin-bottom:8px; font-family:'Outfit', sans-serif; font-weight:800; color:#ef4444;">Access Denied</h2>
+        <p style="color:#64748b; font-size:0.9rem;">Auditor credentials are required to view the Desktop Audit Panel.</p>
+        <p style="color:#6366f1; font-size:0.8rem; margin-top:20px;">Redirecting to Secure Gateway...</p>
+      </div>
+    `;
+    setTimeout(() => {
+      location.href = 'index.html';
+    }, 1500);
+    return;
+  }
+
   try {
     // 1. Initialize IndexedDB database connection
     await window.db.init();
@@ -192,6 +209,34 @@ function bindAdminEvents() {
         importUserLedgerFile(e.target.files[0]);
       }
     });
+  }
+
+  // 🔑 Employee Accounts Manager Binds
+  const btnManageAccounts = document.getElementById('btnManageAccounts');
+  if (btnManageAccounts) {
+    btnManageAccounts.addEventListener('click', openAccountsModal);
+  }
+  
+  const accountsClose = document.getElementById('accountsClose');
+  if (accountsClose) {
+    accountsClose.addEventListener('click', closeAccountsModal);
+  }
+
+  const btnCloseAccounts = document.getElementById('btnCloseAccounts');
+  if (btnCloseAccounts) {
+    btnCloseAccounts.addEventListener('click', closeAccountsModal);
+  }
+
+  const accountsModal = document.getElementById('accountsModal');
+  if (accountsModal) {
+    accountsModal.addEventListener('click', (e) => {
+      if (e.target.id === 'accountsModal') closeAccountsModal();
+    });
+  }
+
+  const addAccountForm = document.getElementById('addAccountForm');
+  if (addAccountForm) {
+    addAccountForm.addEventListener('submit', addAccount);
   }
 
   // Setup visual title
@@ -1053,4 +1098,168 @@ function escapeHtml(string) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+// =========================================================================
+// 🔑 EMPLOYEE ACCOUNTS MANAGEMENT PANEL ENGINE
+// =========================================================================
+
+function openAccountsModal() {
+  const modal = document.getElementById('accountsModal');
+  if (modal) {
+    modal.classList.add('active');
+    loadAccounts();
+  }
+}
+
+function closeAccountsModal() {
+  const modal = document.getElementById('accountsModal');
+  if (modal) {
+    modal.classList.remove('active');
+  }
+}
+
+async function loadAccounts() {
+  const tbody = document.getElementById('accountsTableBody');
+  if (!tbody) return;
+
+  tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); font-size:0.8rem;">Loading accounts from database...</td></tr>`;
+
+  try {
+    const response = await fetch('/api/users');
+    const result = await response.json();
+
+    if (result.success && result.users) {
+      tbody.innerHTML = '';
+      if (result.users.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); font-size:0.8rem;">No registered accounts found.</td></tr>`;
+        return;
+      }
+
+      result.users.forEach(user => {
+        const tr = document.createElement('tr');
+        const roleBadge = user.role === 'admin' 
+          ? `<span class="portal-badge" style="background:rgba(16,185,129,0.1); border-color:rgba(16,185,129,0.2); color:#6ee7b7; font-size:0.65rem;">Auditor Admin</span>` 
+          : `<span class="portal-badge" style="background:rgba(99,102,241,0.1); border-color:rgba(99,102,241,0.2); color:#a5b4fc; font-size:0.65rem;">Employee User</span>`;
+
+        tr.innerHTML = `
+          <td style="font-weight:700; color:var(--text-primary); font-size:0.85rem; padding: 10px 16px;">${escapeHtml(user.loginId)}</td>
+          <td style="font-family:monospace; color:var(--text-secondary); font-size:0.85rem; padding: 10px 16px;">${escapeHtml(user.password)}</td>
+          <td style="padding: 10px 16px;">${roleBadge}</td>
+          <td style="text-align:right; padding: 10px 16px; display: flex; gap: 6px; justify-content: flex-end;">
+            <button class="status-btn" onclick="resetEmployeePassword('${user.loginId}')" style="background:rgba(16,185,129,0.1); border-color:rgba(16,185,129,0.2); color:#6ee7b7; font-size:0.7rem; padding:4px 8px;">
+              ✏️ Reset
+            </button>
+            <button class="status-btn" onclick="deleteAccount('${user.id}', '${user.loginId}')" style="background:rgba(239,68,68,0.1); border-color:rgba(239,68,68,0.2); color:#f87171; font-size:0.7rem; padding:4px 8px;">
+              🗑️ Delete
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    } else {
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#ef4444; font-size:0.8rem;">Failed to fetch accounts.</td></tr>`;
+    }
+  } catch (err) {
+    console.error('Fetch users error:', err);
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); font-size:0.8rem;">Running offline. Predefined accounts: admin / user</td></tr>`;
+  }
+}
+
+// Expose actions globally for inline html onclick bindings
+window.deleteAccount = deleteAccount;
+window.resetEmployeePassword = resetEmployeePassword;
+
+async function resetEmployeePassword(loginId) {
+  const newPass = prompt(`Enter a new security password for employee "${loginId}":`);
+  if (!newPass) return;
+
+  if (newPass.trim().length < 4) {
+    alert("Security Alert: Password must be at least 4 characters long.");
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/auth/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ loginId, newPassword: newPass.trim() })
+    });
+
+    const result = await response.json();
+
+    if (response.ok && result.success) {
+      showToast(`Password for "${loginId}" updated successfully!`, 'success');
+      loadAccounts();
+    } else {
+      showToast(result.error || 'Failed to reset password.', 'error');
+    }
+  } catch (err) {
+    console.error(err);
+    showToast('Offline Mode: Cannot reset passwords without server database.', 'error');
+  }
+}
+
+async function addAccount(e) {
+  e.preventDefault();
+  const loginIdInput = document.getElementById('newLoginId');
+  const passwordInput = document.getElementById('newPassword');
+  const roleInput = document.getElementById('newRole');
+
+  const loginId = loginIdInput.value.trim();
+  const password = passwordInput.value;
+  const role = roleInput.value;
+
+  if (!loginId || !password || !role) return;
+
+  try {
+    const response = await fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ loginId, password, role })
+    });
+
+    const result = await response.json();
+
+    if (response.ok && result.success) {
+      showToast(`User account "${loginId}" registered successfully!`, 'success');
+      loginIdInput.value = '';
+      passwordInput.value = '';
+      loadAccounts();
+    } else {
+      showToast(result.error || 'Failed to add user account.', 'error');
+    }
+  } catch (err) {
+    console.error(err);
+    showToast('Offline Mode: Cannot register accounts without server database.', 'error');
+  }
+}
+
+async function deleteAccount(id, loginId) {
+  // Prevent self-deletion of currently logged-in account
+  const currentLogin = sessionStorage.getItem('emyxpnse_login_id');
+  if (loginId === currentLogin) {
+    showToast('Security Alert: You cannot delete your own logged-in account!', 'error');
+    return;
+  }
+
+  if (!confirm(`Are you absolutely sure you want to delete the account "${loginId}"?`)) return;
+
+  try {
+    const response = await fetch(`/api/users/${id}`, {
+      method: 'DELETE'
+    });
+
+    const result = await response.json();
+
+    if (response.ok && result.success) {
+      showToast(`Account "${loginId}" deleted successfully.`, 'success');
+      loadAccounts();
+    } else {
+      showToast('Failed to delete account.', 'error');
+    }
+  } catch (err) {
+    console.error(err);
+    showToast('Offline Mode: Cannot delete accounts without server database.', 'error');
+  }
 }

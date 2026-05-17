@@ -23,6 +23,23 @@ const MOCK_CATEGORIES = [
 
 // Initialize application on DOM load
 document.addEventListener('DOMContentLoaded', async () => {
+  // SECURITY GATE: Verify active login session exists
+  const userRole = sessionStorage.getItem('emyxpnse_user_role');
+  if (!userRole) {
+    document.body.innerHTML = `
+      <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:#0b0f19; color:#cbd5e1; font-family:sans-serif; text-align:center;">
+        <span style="font-size:3rem; margin-bottom:15px;">🔒</span>
+        <h2 style="margin-bottom:8px; font-family:'Outfit', sans-serif; font-weight:800; color:#ef4444;">Session Required</h2>
+        <p style="color:#64748b; font-size:0.9rem;">Please authenticate via the secure gateway first.</p>
+        <p style="color:#6366f1; font-size:0.8rem; margin-top:20px;">Redirecting to Login...</p>
+      </div>
+    `;
+    setTimeout(() => {
+      location.href = 'index.html';
+    }, 1500);
+    return;
+  }
+
   try {
     // 1. Initialize IndexedDB database connection
     await window.db.init();
@@ -197,6 +214,34 @@ function bindEventListeners() {
         location.href = 'index.html';
       }, 1000);
     });
+  }
+
+  // 🔑 Employee Password Change Binds
+  const btnChangePassword = document.getElementById('btnChangePassword');
+  if (btnChangePassword) {
+    btnChangePassword.addEventListener('click', openPasswordModal);
+  }
+
+  const passwordClose = document.getElementById('passwordClose');
+  if (passwordClose) {
+    passwordClose.addEventListener('click', closePasswordModal);
+  }
+
+  const btnCancelPassword = document.getElementById('btnCancelPassword');
+  if (btnCancelPassword) {
+    btnCancelPassword.addEventListener('click', closePasswordModal);
+  }
+
+  const passwordModal = document.getElementById('passwordModal');
+  if (passwordModal) {
+    passwordModal.addEventListener('click', (e) => {
+      if (e.target.id === 'passwordModal') closePasswordModal();
+    });
+  }
+
+  const changePasswordForm = document.getElementById('changePasswordForm');
+  if (changePasswordForm) {
+    changePasswordForm.addEventListener('submit', handlePasswordChange);
   }
 }
 
@@ -1088,5 +1133,63 @@ async function exportToAdminJSON() {
   } catch (err) {
     console.error(err);
     showToast('Export packing failed.', 'error');
+  }
+}
+
+// =========================================================================
+// 🔐 EMPLOYEE PASSWORD CHANGE MODAL CONTROLLER
+// =========================================================================
+
+function openPasswordModal() {
+  const modal = document.getElementById('passwordModal');
+  if (modal) {
+    modal.classList.add('active');
+  }
+}
+
+function closePasswordModal() {
+  const modal = document.getElementById('passwordModal');
+  if (modal) {
+    modal.classList.remove('active');
+    document.getElementById('changePasswordForm').reset();
+  }
+}
+
+async function handlePasswordChange(e) {
+  e.preventDefault();
+  
+  const newPass = document.getElementById('newPassword').value;
+  const confirmPass = document.getElementById('confirmPassword').value;
+
+  if (newPass.length < 4) {
+    showToast('Password must be at least 4 characters long.', 'error');
+    return;
+  }
+
+  if (newPass !== confirmPass) {
+    showToast('New passwords do not match.', 'error');
+    return;
+  }
+
+  const loginId = sessionStorage.getItem('emyxpnse_login_id');
+
+  try {
+    const response = await fetch('/api/auth/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ loginId, newPassword: newPass })
+    });
+
+    const result = await response.json();
+
+    if (response.ok && result.success) {
+      showToast('Password updated successfully inside credentials!', 'success');
+      closePasswordModal();
+    } else {
+      showToast(result.error || 'Failed to change password.', 'error');
+    }
+  } catch (err) {
+    console.error(err);
+    showToast('Offline Mode: Cannot change password without server connection.', 'error');
   }
 }
