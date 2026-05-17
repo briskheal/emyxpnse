@@ -703,6 +703,35 @@ function updateDayNumber(dayId, newVal) {
 function updateDayDate(dayId, newVal) {
   const day = findDay(dayId);
   if (!day) return;
+
+  // Check if ANOTHER card already has this exact date to prevent duplicates
+  const currentMonthKey = state.selectedMonth;
+  const currentMonth = state.months[currentMonthKey];
+  const existingDay = currentMonth.days.find(d => d.date === newVal && d.id !== dayId);
+
+  if (existingDay) {
+    showToast(`A sheet for ${newVal} already exists. Switching you to the existing record.`, 'warning');
+    
+    // Automatically make it visible if it was hidden under the clean view filter
+    const hideSyncedToggle = document.getElementById('hideSyncedToggle');
+    if (hideSyncedToggle && hideSyncedToggle.checked && existingDay.syncStatus === 'synced') {
+      hideSyncedToggle.checked = false;
+    }
+    
+    renderAll();
+    
+    // Scroll and pulse the existing card
+    setTimeout(() => {
+      const el = document.getElementById(existingDay.id);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('highlight-glow');
+        setTimeout(() => el.classList.remove('highlight-glow'), 2000);
+      }
+    }, 150);
+    return;
+  }
+
   day.date = newVal;
   
   // Dynamically keep dayNumber synchronized with date day for serial numbers (e.g., Day 17 for YYYY-MM-17)
@@ -717,6 +746,10 @@ function updateDayDate(dayId, newVal) {
   }
 
   day.syncStatus = 'pending';
+  
+  // Sort cards chronologically so the list remains clean and ordered
+  currentMonth.days.sort((a, b) => a.date.localeCompare(b.date));
+
   saveState();
   renderAll();
 }
@@ -1401,6 +1434,13 @@ async function handleGoToDateSubmit(e) {
   const existingDay = currentMonth.days.find(d => d.date === selectedDateStr);
   
   if (existingDay) {
+    // If the card is synced but hidden because of the clean-view filter, automatically uncheck the filter!
+    const hideSyncedToggle = document.getElementById('hideSyncedToggle');
+    if (hideSyncedToggle && hideSyncedToggle.checked && existingDay.syncStatus === 'synced') {
+      hideSyncedToggle.checked = false;
+      renderAll(); // Re-render so the synced card is visible before scrolling
+    }
+
     closeDatePickerModal();
     // Scroll and pulse target card to notify user!
     setTimeout(() => {
