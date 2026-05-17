@@ -438,7 +438,7 @@ app.get('*', (req, res, next) => {
 
 // Start Server Routine
 if (dbEnabled) {
-  db.sequelize.sync().then(async () => {
+  db.sequelize.sync({ alter: true }).then(async () => {
     console.log('✅ PostgreSQL Supabase Models synchronized successfully.');
     
     // Seed default credentials if admin/user accounts don't exist!
