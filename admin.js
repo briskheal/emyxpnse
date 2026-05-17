@@ -285,7 +285,7 @@ function bindAdminEvents() {
       // AUTOMATED DATA PROTECTION AUDIT BACKUP:
       // Instantly generate and trigger a local download of the compiled audited CSV ledger backup!
       try {
-        exportAuditedCSV();
+        exportAuditedCSV(true);
       } catch (err) {
         console.error('Auto Audited CSV export failed on logout:', err);
       }
@@ -1119,27 +1119,47 @@ async function deleteDay(dayId) {
 // Note: deleteExpense is defined above at line 782 and bound globally.
 
 // Export final Compiled Audit CSV (Including audit status verification and remarks!)
-function exportAuditedCSV() {
+// Export final Compiled Audit CSV (Including audit status verification and remarks!)
+function exportAuditedCSV(isAutoBackup = false) {
   const currentMonth = state.months[state.selectedMonth];
   if (!currentMonth || currentMonth.days.length === 0) {
-    showToast('No data available to export.', 'error');
+    if (!isAutoBackup) showToast('No data available to export.', 'error');
+    return;
+  }
+
+  const adminDatePicker = document.getElementById('adminDatePicker');
+  const adminEmpFilter = document.getElementById('adminEmpFilter');
+  
+  const pickedDate = adminDatePicker ? adminDatePicker.value : '';
+  const pickedEmp = adminEmpFilter ? adminEmpFilter.value : '';
+
+  const filteredDays = currentMonth.days.filter(day => {
+    if (!day.expenses || day.expenses.length === 0) return false;
+    if (pickedDate && day.date !== pickedDate) return false;
+    if (pickedEmp && day.loginId !== pickedEmp) return false;
+    return true;
+  });
+
+  if (filteredDays.length === 0) {
+    if (!isAutoBackup) showToast('No active filtered data available to export.', 'error');
     return;
   }
 
   let csvContent = '\uFEFF'; // UTF-8 BOM
-  csvContent += 'Serial No,Date,Expense Description,Amount (INR),Receipt Filename,Audit Status,Auditor Remarks\r\n';
+  csvContent += 'Serial No,Date,Employee ID,Expense Description,Amount (INR),Receipt Filename,Audit Status,Auditor Remarks\r\n';
 
-  currentMonth.days.forEach(day => {
+  filteredDays.forEach(day => {
     day.expenses.forEach((exp, idx) => {
       const serial = `"${day.dayNumber}.${idx + 1}"`;
       const date = `"${day.date}"`;
-      const name = `"${(exp.name || '').replace(/"/g, '""')}"`;
-      const amt = `"${(exp.amount || 0).toFixed(2)}"`;
-      const voucherName = `"${(exp.voucherName || 'None').replace(/"/g, '""')}"`;
-      const status = `"${(exp.auditStatus || 'pending').toUpperCase()}"`;
-      const comment = `"${(exp.adminComment || '').replace(/"/g, '""')}"`;
+      const empId = `"${day.loginId || 'N/A'}"`;
+      const name = `"${String(exp.name || '').replace(/"/g, '""')}"`;
+      const amt = `"${(parseFloat(exp.amount) || 0).toFixed(2)}"`;
+      const voucherName = `"${String(exp.voucherName || 'None').replace(/"/g, '""')}"`;
+      const status = `"${String(exp.auditStatus || 'pending').toUpperCase()}"`;
+      const comment = `"${String(exp.adminComment || '').replace(/"/g, '""')}"`;
 
-      csvContent += `${serial},${date},${name},${amt},${voucherName},${status},${comment}\r\n`;
+      csvContent += `${serial},${date},${empId},${name},${amt},${voucherName},${status},${comment}\r\n`;
     });
   });
 
@@ -1151,7 +1171,7 @@ function exportAuditedCSV() {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  showToast('Audited CSV ledger downloaded successfully.', 'success');
+  if (!isAutoBackup) showToast('Audited CSV ledger downloaded successfully.', 'success');
 }
 
 // SVG mock receipt builder
