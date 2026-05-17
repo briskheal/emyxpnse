@@ -17,7 +17,11 @@ module.exports = (sequelize, DataTypes) => {
     role: { 
       type: DataTypes.ENUM('user', 'admin'), 
       defaultValue: 'user' 
-    } // 'user' represents standard mobile employees, 'admin' represents desktop auditors
+    }, // 'user' represents standard mobile employees, 'admin' represents desktop auditors
+    lastActiveAt: {
+      type: DataTypes.DATE,
+      allowNull: true
+    }
   }, { 
     timestamps: true 
   });

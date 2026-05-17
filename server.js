@@ -66,6 +66,8 @@ app.post('/api/auth/login', async (req, res) => {
     if (!user || user.password !== password) {
       return res.status(401).json({ success: false, error: 'Invalid Login ID or Password.' });
     }
+    user.lastActiveAt = new Date();
+    await user.save();
     res.json({ success: true, role: user.role, loginId: user.loginId });
   } catch (err) {
     console.error('Login failure:', err);
@@ -289,6 +291,18 @@ app.post('/api/sync/day', async (req, res) => {
   const transaction = await db.sequelize.transaction();
   try {
     const { loginId, monthKey, dayData, vouchers } = req.body;
+
+    // Log active sync usage log
+    if (loginId) {
+      try {
+        await db.User.update(
+          { lastActiveAt: new Date() },
+          { where: { loginId: loginId.trim() } }
+        );
+      } catch (logErr) {
+        console.error('Failed to log sync activity timestamp:', logErr.message);
+      }
+    }
 
     if (!dayData || !dayData.id) {
       return res.status(400).json({ success: false, error: 'Incomplete day data payload.' });

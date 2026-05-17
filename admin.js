@@ -1125,7 +1125,7 @@ async function loadAccounts() {
   const tbody = document.getElementById('accountsTableBody');
   if (!tbody) return;
 
-  tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); font-size:0.8rem;">Loading accounts from database...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); font-size:0.8rem;">Loading accounts from database...</td></tr>`;
 
   try {
     const response = await fetch('/api/users');
@@ -1134,7 +1134,7 @@ async function loadAccounts() {
     if (result.success && result.users) {
       tbody.innerHTML = '';
       if (result.users.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); font-size:0.8rem;">No registered accounts found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); font-size:0.8rem;">No registered accounts found.</td></tr>`;
         return;
       }
 
@@ -1144,10 +1144,24 @@ async function loadAccounts() {
           ? `<span class="portal-badge" style="background:rgba(16,185,129,0.1); border-color:rgba(16,185,129,0.2); color:#6ee7b7; font-size:0.65rem;">Auditor Admin</span>` 
           : `<span class="portal-badge" style="background:rgba(99,102,241,0.1); border-color:rgba(99,102,241,0.2); color:#a5b4fc; font-size:0.65rem;">Employee User</span>`;
 
+        let activeTimeStr = '<span style="color:var(--text-muted); opacity:0.5;">Never Active</span>';
+        if (user.lastActiveAt) {
+          const d = new Date(user.lastActiveAt);
+          activeTimeStr = `<span style="color:var(--color-emerald); font-weight:600;">${d.toLocaleString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+          })}</span>`;
+        }
+
         tr.innerHTML = `
           <td style="font-weight:700; color:var(--text-primary); font-size:0.85rem; padding: 10px 16px;">${escapeHtml(user.loginId)}</td>
           <td style="font-family:monospace; color:var(--text-secondary); font-size:0.85rem; padding: 10px 16px;">${escapeHtml(user.password)}</td>
           <td style="padding: 10px 16px;">${roleBadge}</td>
+          <td style="padding: 10px 16px; font-size:0.8rem;">${activeTimeStr}</td>
           <td style="text-align:right; padding: 10px 16px; display: flex; gap: 6px; justify-content: flex-end;">
             <button class="status-btn" onclick="resetEmployeePassword('${user.loginId}')" style="background:rgba(16,185,129,0.1); border-color:rgba(16,185,129,0.2); color:#6ee7b7; font-size:0.7rem; padding:4px 8px;">
               ✏️ Reset
@@ -1160,11 +1174,11 @@ async function loadAccounts() {
         tbody.appendChild(tr);
       });
     } else {
-      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#ef4444; font-size:0.8rem;">Failed to fetch accounts.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#ef4444; font-size:0.8rem;">Failed to fetch accounts.</td></tr>`;
     }
   } catch (err) {
     console.error('Fetch users error:', err);
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); font-size:0.8rem;">Running offline. Predefined accounts: admin / user</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); font-size:0.8rem;">Running offline. Predefined accounts: admin / user</td></tr>`;
   }
 }
 
@@ -1245,7 +1259,15 @@ async function deleteAccount(id, loginId) {
     return;
   }
 
-  if (!confirm(`Are you absolutely sure you want to delete the account "${loginId}"?`)) return;
+  // Layer 1 Confirmation
+  if (!confirm(`Are you absolutely sure you want to delete the employee account "${loginId}"?`)) return;
+
+  // Layer 2 Confirmation - Typing Verification Guard
+  const confirmText = prompt(`⚠️ SECURITY NOTICE:\nDeleting "${loginId}" will permanently purge their database logins.\nType 'DELETE' in all capital letters to confirm this action:`);
+  if (!confirmText || confirmText.trim() !== 'DELETE') {
+    showToast('Account deletion aborted. Security guard activated.', 'info');
+    return;
+  }
 
   try {
     const response = await fetch(`/api/users/${id}`, {
