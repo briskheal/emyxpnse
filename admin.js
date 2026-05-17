@@ -694,7 +694,18 @@ function updateExpenseField(dayId, expId, field, value) {
 function updateDayNumber(dayId, newVal) {
   const day = findDay(dayId);
   if (!day) return;
-  day.dayNumber = parseInt(newVal) || 1;
+  const num = Math.min(31, Math.max(1, parseInt(newVal) || 1));
+  day.dayNumber = num;
+  
+  // Dynamically keep date picker day component synchronized with manual dayNumber edits!
+  if (day.date) {
+    const parts = day.date.split('-');
+    if (parts.length === 3) {
+      parts[2] = String(num).padStart(2, '0');
+      day.date = parts.join('-');
+    }
+  }
+
   saveState();
   renderAll();
 }
@@ -703,6 +714,18 @@ function updateDayDate(dayId, newVal) {
   const day = findDay(dayId);
   if (!day) return;
   day.date = newVal;
+  
+  // Dynamically keep dayNumber synchronized with date day for serial numbers (e.g., Day 17 for YYYY-MM-17)
+  if (newVal) {
+    const parts = newVal.split('-');
+    if (parts.length === 3) {
+      const dayNum = parseInt(parts[2], 10);
+      if (!isNaN(dayNum)) {
+        day.dayNumber = dayNum;
+      }
+    }
+  }
+
   saveState();
   renderAll();
 }
