@@ -33,25 +33,32 @@
         <span class="select-arrow">▼</span>
       </div>
 
-      <button class="btn btn-primary" id="btnAddDay">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <button class="btn btn-primary" id="btnAddDay" style="min-height: 36px; height: 36px; padding: 0 10px; font-size: 0.75rem;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
           <line x1="12" y1="5" x2="12" y2="19"></line>
           <line x1="5" y1="12" x2="19" y2="12"></line>
         </svg>
         Add Day
       </button>
 
-      <button class="btn" id="btnGoToDate" style="min-height: 36px; height: 36px; padding: 0 10px; font-size: 0.75rem; background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.3); color: #6ee7b7; margin-right: 5px;">
-        📅 Go to Date
-      </button>
-
-      <button class="btn" id="btnChangePassword" style="min-height: 36px; height: 36px; padding: 0 10px; font-size: 0.75rem; border-color: rgba(99, 102, 241, 0.3); color: #a5b4fc; margin-right: 5px;">
-        🔑 Password
-      </button>
-
-      <button class="btn btn-danger" id="btnLogout" style="min-height: 36px; height: 36px; padding: 0 10px; font-size: 0.75rem;">
-        🚪 Logout
-      </button>
+      <!-- Unified Mobile Settings Dropdown Drawer -->
+      <div class="header-menu-container" style="position: relative;">
+        <button class="btn" id="btnHeaderMenu" style="min-height: 36px; height: 36px; padding: 0 10px; font-size: 0.8rem; background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.1);">
+          ⚙️
+        </button>
+        <div class="header-menu-dropdown" id="headerDropdown" style="display: none; position: absolute; top: 42px; right: 0; background: rgba(11, 15, 25, 0.96); backdrop-filter: blur(25px); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.6); width: 170px; z-index: 1000; padding: 6px; flex-direction: column; gap: 4px;">
+          <button class="dropdown-item" id="btnGoToDate" style="width: 100%; text-align: left; background: transparent; border: none; padding: 10px 12px; color: var(--text-primary); font-family: var(--font-brand); font-size: 0.8rem; font-weight: 600; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+            📅 Go to Date
+          </button>
+          <button class="dropdown-item" id="btnChangePassword" style="width: 100%; text-align: left; background: transparent; border: none; padding: 10px 12px; color: var(--text-primary); font-family: var(--font-brand); font-size: 0.8rem; font-weight: 600; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+            🔑 Password
+          </button>
+          <div style="height: 1px; background: rgba(255,255,255,0.08); margin: 4px 0;"></div>
+          <button class="dropdown-item" id="btnLogout" style="width: 100%; text-align: left; background: transparent; border: none; padding: 10px 12px; color: #f87171; font-family: var(--font-brand); font-size: 0.8rem; font-weight: 600; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+            🚪 Logout
+          </button>
+        </div>
+      </div>
     </div>
   </header>
 

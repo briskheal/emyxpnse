@@ -271,6 +271,31 @@ function bindEventListeners() {
   if (changePasswordForm) {
     changePasswordForm.addEventListener('submit', handlePasswordChange);
   }
+
+  // ⚙️ Unified Mobile Header Dropdown Toggler
+  const btnHeaderMenu = document.getElementById('btnHeaderMenu');
+  const headerDropdown = document.getElementById('headerDropdown');
+  if (btnHeaderMenu && headerDropdown) {
+    btnHeaderMenu.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = headerDropdown.style.display === 'flex';
+      headerDropdown.style.display = isOpen ? 'none' : 'flex';
+    });
+
+    // Close dropdown instantly when clicking any item inside it
+    headerDropdown.querySelectorAll('.dropdown-item').forEach(item => {
+      item.addEventListener('click', () => {
+        headerDropdown.style.display = 'none';
+      });
+    });
+
+    // Auto-close dropdown when clicking anywhere outside of it
+    document.addEventListener('click', (e) => {
+      if (!btnHeaderMenu.contains(e.target) && !headerDropdown.contains(e.target)) {
+        headerDropdown.style.display = 'none';
+      }
+    });
+  }
 }
 
 // Add a new Day Card to the current sheet
