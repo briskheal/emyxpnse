@@ -108,15 +108,15 @@ app.get('/api/users', async (req, res) => {
     return res.json({ 
       success: true, 
       users: [
-        { id: '1', loginId: 'admin', password: 'EMYXPNSE@2026', role: 'admin', createdAt: new Date() },
-        { id: '2', loginId: 'user', password: 'EMYXPNSE@2026', role: 'user', createdAt: new Date() }
+        { id: '1', loginId: 'admin', password: 'EMYXPNSE@2026', role: 'admin', name: 'System Administrator', empCode: 'ADM001', createdAt: new Date() },
+        { id: '2', loginId: 'user', password: 'EMYXPNSE@2026', role: 'user', name: 'Standard Field Executive', empCode: 'FE01', createdAt: new Date() }
       ] 
     });
   }
 
   try {
     const users = await db.User.findAll({ 
-      attributes: ['id', 'loginId', 'password', 'role', 'lastActiveAt', 'createdAt'],
+      attributes: ['id', 'loginId', 'password', 'role', 'name', 'empCode', 'lastActiveAt', 'createdAt'],
       order: [['createdAt', 'DESC']] 
     });
     res.json({ success: true, users });
@@ -133,7 +133,7 @@ app.post('/api/users', async (req, res) => {
   }
 
   try {
-    const { loginId, password, role } = req.body;
+    const { loginId, password, role, name, empCode } = req.body;
     if (!loginId || !password || !role) {
       return res.status(400).json({ success: false, error: 'All fields are required.' });
     }
@@ -141,12 +141,39 @@ app.post('/api/users', async (req, res) => {
     const newUser = await db.User.create({ 
       loginId: loginId.trim(), 
       password, 
-      role 
+      role,
+      name: name ? name.trim() : '',
+      empCode: empCode ? empCode.trim() : ''
     });
     res.json({ success: true, user: newUser });
   } catch (err) {
     console.error('Create user failure:', err);
     res.status(500).json({ success: false, error: 'Login ID already exists or is invalid.' });
+  }
+});
+
+// REST API — Update an employee account profile (Name, Employee Code, or Password)
+app.put('/api/users/:id', async (req, res) => {
+  if (!dbEnabled) {
+    return res.status(503).json({ success: false, error: 'Database is in offline mode.' });
+  }
+
+  try {
+    const { name, empCode, password } = req.body;
+    const user = await db.User.findByPk(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Employee account not found.' });
+    }
+
+    if (name !== undefined) user.name = name.trim();
+    if (empCode !== undefined) user.empCode = empCode.trim();
+    if (password !== undefined && password.trim() !== '') user.password = password.trim();
+
+    await user.save();
+    res.json({ success: true, message: 'Employee profile updated successfully.', user });
+  } catch (err) {
+    console.error('Update user failure:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

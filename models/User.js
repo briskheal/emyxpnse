@@ -18,6 +18,14 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.ENUM('user', 'admin'), 
       defaultValue: 'user' 
     }, // 'user' represents standard mobile employees, 'admin' represents desktop auditors
+    name: {
+      type: DataTypes.STRING,
+      defaultValue: ''
+    },
+    empCode: {
+      type: DataTypes.STRING,
+      defaultValue: ''
+    },
     lastActiveAt: {
       type: DataTypes.DATE,
       allowNull: true

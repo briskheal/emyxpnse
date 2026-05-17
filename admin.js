@@ -63,6 +63,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 3. Populate selectors & listeners
     populateMonthSelector();
+    await populateEmployeeFilterDropdown();
     bindAdminEvents();
 
     // 4. Initial audit compilation
@@ -155,6 +156,48 @@ function populateMonthSelector() {
   selector.value = state.selectedMonth;
 }
 
+// Dynamically populate the auditor's employee filter selector dropdown
+async function populateEmployeeFilterDropdown() {
+  const empSelector = document.getElementById('adminEmpFilter');
+  if (!empSelector) return;
+
+  const previousVal = empSelector.value;
+
+  try {
+    const response = await fetch('/api/users');
+    const result = await response.json();
+
+    empSelector.innerHTML = '<option value="">All Employees</option>';
+
+    if (result.success && result.users) {
+      // Only include roles that represent employees ('user')
+      const employees = result.users.filter(u => u.role === 'user');
+      
+      employees.forEach(emp => {
+        const option = document.createElement('option');
+        option.value = emp.loginId; // We map the sync loginId
+        
+        let label = emp.loginId;
+        if (emp.name && emp.empCode) {
+          label = `${emp.name} (${emp.empCode})`;
+        } else if (emp.name) {
+          label = emp.name;
+        } else if (emp.empCode) {
+          label = `${emp.loginId} (${emp.empCode})`;
+        }
+        
+        option.textContent = label;
+        empSelector.appendChild(option);
+      });
+    }
+  } catch (err) {
+    console.error('Failed to populate employee filter dropdown:', err);
+  }
+
+  // Restore the selected employee filter if it still exists
+  empSelector.value = previousVal || "";
+}
+
 // Bind admin-focused interaction controls
 function bindAdminEvents() {
   // Selector switch
@@ -168,10 +211,20 @@ function bindAdminEvents() {
     showToast(`Switched audit sheet: ${e.target.selectedOptions[0].textContent}`);
   });
 
-  // Action buttons
-  document.getElementById('btnAddDay').addEventListener('click', () => {
-    addNewDay();
-  });
+  // Real-time Date and Employee filters
+  const adminDatePicker = document.getElementById('adminDatePicker');
+  if (adminDatePicker) {
+    adminDatePicker.addEventListener('change', () => {
+      renderAll();
+    });
+  }
+
+  const adminEmpFilter = document.getElementById('adminEmpFilter');
+  if (adminEmpFilter) {
+    adminEmpFilter.addEventListener('change', () => {
+      renderAll();
+    });
+  }
 
   const btnResetDB = document.getElementById('btnResetDB');
   if (btnResetDB) {
@@ -385,10 +438,34 @@ function renderWorkspace(searchQuery = '') {
       <div class="empty-state">
         <div class="empty-state-icon">📂</div>
         <h3>No Expense Data Loaded</h3>
-        <p>This desktop sheet is currently empty. Import a mobile user ledger package JSON file on the left, load the demo ledger, or manually build expense items.</p>
-        <div style="display:flex; gap:10px; width: 100%; max-width: 200px;">
-          <button class="btn btn-primary" onclick="addNewDay()" style="flex:1;">➕ Start Ledger</button>
-        </div>
+        <p>No user submissions have been synchronized for this active month yet. Submissions will automatically populate here in real-time once pushed by standard employees.</p>
+      </div>
+    `;
+    return;
+  }
+
+  // Real-time Date and Employee Filtering
+  const adminDatePicker = document.getElementById('adminDatePicker');
+  const adminEmpFilter = document.getElementById('adminEmpFilter');
+  
+  const pickedDate = adminDatePicker ? adminDatePicker.value : '';
+  const pickedEmp = adminEmpFilter ? adminEmpFilter.value : '';
+
+  const filteredDays = currentMonth.days.filter(day => {
+    // 1. Date Calendar Filter
+    if (pickedDate && day.date !== pickedDate) return false;
+    // 2. Employee Selector Filter
+    if (pickedEmp && day.loginId !== pickedEmp) return false;
+    return true;
+  });
+
+  if (filteredDays.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state" style="padding: 40px 16px;">
+        <div class="empty-state-icon">🔍</div>
+        <h3>No matching submissions found</h3>
+        <p>There are no employee expense records matching your chosen filters in the database.</p>
+        <button class="btn btn-primary" onclick="clearAuditorFilters()" style="margin-top: 10px;">Clear All Filters</button>
       </div>
     `;
     return;
@@ -397,8 +474,8 @@ function renderWorkspace(searchQuery = '') {
   container.innerHTML = '';
   let matchFound = false;
 
-  currentMonth.days.forEach(day => {
-    // Filter rows based on search
+  filteredDays.forEach(day => {
+    // Filter rows based on search input
     const filteredExpenses = day.expenses.filter(exp => {
       if (!searchQuery) return true;
       const term = searchQuery.toLowerCase();
@@ -425,25 +502,18 @@ function renderWorkspace(searchQuery = '') {
     card.innerHTML = `
       <div class="day-header" style="padding: 14px 20px;">
         <div class="day-info" style="display:flex; align-items:center; gap:8px;">
-          <div class="day-badge">
-            Day 
-            <input type="number" value="${day.dayNumber}" min="1" max="31" 
-              onchange="updateDayNumber('${day.id}', this.value)" 
-              onclick="event.stopPropagation()"
-            />
-          </div>
-          <input type="date" class="day-date-picker" value="${day.date}" 
-            onchange="updateDayDate('${day.id}', this.value)"
-          />
+          <span style="font-family:var(--font-brand); font-weight:800; font-size:1.05rem; color:#f8fafc; background:rgba(255,255,255,0.06); padding:4px 10px; border-radius:6px; border:1px solid rgba(255,255,255,0.1);">
+            Day ${day.dayNumber}
+          </span>
+          <span style="font-family:monospace; font-size:0.85rem; color:var(--text-secondary); background:rgba(255,255,255,0.03); padding:4px 8px; border-radius:6px; border:1px solid rgba(255,255,255,0.06);">
+            📅 ${new Date(day.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', weekday: 'short' })}
+          </span>
           <span style="font-size:0.75rem; font-weight:700; background:rgba(99,102,241,0.15); color:var(--color-indigo); padding:4px 8px; border-radius:6px; border:1px solid rgba(99,102,241,0.3); display:inline-flex; align-items:center; gap:4px; text-transform:capitalize;" title="Submitted by Employee">
-            👤 Employee: ${day.loginId || 'user'}
+            👤 Employee Code: ${day.loginId || 'user'}
           </span>
         </div>
         <div class="day-actions">
           <div class="day-subtotal">Day Subtotal: ₹${dayTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-          <button class="btn btn-danger btn-icon-only" onclick="deleteDay('${day.id}')" style="width:34px; height:34px;" title="Delete Day">
-            🗑️
-          </button>
         </div>
       </div>
       
@@ -458,19 +528,13 @@ function renderWorkspace(searchQuery = '') {
               <th style="width: 220px;">Voucher Document</th>
               <th style="width: 240px; text-align: center;">Audit Verification</th>
               <th style="width: 280px;">Audit Remarks / Notes</th>
-              <th style="width: 60px; text-align: center;"></th>
+              <th style="width: 80px; text-align: center;">Actions</th>
             </tr>
           </thead>
           <tbody id="table-body-${day.id}">
             <!-- Rows render here -->
           </tbody>
         </table>
-      </div>
-
-      <div class="day-card-footer" style="padding: 10px 20px; display: flex; justify-content: flex-start; background: rgba(0,0,0,0.05);">
-        <button class="btn btn-success" onclick="addExpenseItem('${day.id}')" style="font-size:0.75rem; padding: 6px 12px;">
-          ➕ Insert Expense Row
-        </button>
       </div>
     `;
 
@@ -502,38 +566,27 @@ function renderWorkspace(searchQuery = '') {
 
         row.innerHTML = `
           <!-- Serial -->
-          <td style="font-weight: 700; color: var(--text-muted); font-size: 0.8rem;">${serialStr}</td>
+          <td style="font-weight: 700; color: var(--text-muted); font-size: 0.8rem; padding: 10px 16px;">${serialStr}</td>
           
           <!-- Expense Details Description -->
-          <td>
-            <input type="text" class="cell-input" style="font-size: 0.85rem; padding: 4px;"
-              value="${escapeHtml(exp.name)}" 
-              placeholder="e.g. Travel tickets, stationery..."
-              oninput="updateExpenseField('${day.id}', '${exp.id}', 'name', this.value)"
-            />
+          <td style="font-size: 0.85rem; font-weight: 500; color: var(--text-primary); padding: 10px 16px;">
+            ${escapeHtml(exp.name || 'Untitled Expense')}
           </td>
 
           <!-- Amount -->
-          <td>
-            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 4px;">
-              <span style="font-size:0.8rem; color:var(--text-muted)">₹</span>
-              <input type="number" class="cell-input number-input" step="0.01" min="0" 
-                style="text-align: right; font-size: 0.85rem; font-weight: 700; color: var(--color-emerald); max-width: 110px; padding: 4px;"
-                value="${exp.amount || ''}" 
-                placeholder="0.00"
-                oninput="updateExpenseField('${day.id}', '${exp.id}', 'amount', this.value)"
-                onblur="formatAmountCell(this)"
-              />
-            </div>
+          <td style="text-align: right; padding: 10px 16px;">
+            <span style="font-size: 0.85rem; font-weight: 800; color: var(--color-emerald);">
+              ₹${parseFloat(exp.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </span>
           </td>
 
           <!-- Voucher File Attachment Info -->
-          <td id="voucher-cell-${exp.id}">
+          <td id="voucher-cell-${exp.id}" style="padding: 10px 16px;">
             <!-- Managed dynamically by renderVoucherCell -->
           </td>
 
           <!-- Verification Toggle Pills -->
-          <td>
+          <td style="padding: 10px 16px;">
             <div class="status-pill-group" style="justify-content: center;">
               <button class="status-btn approved ${currentStatus === 'approved' ? 'active' : ''}" 
                 onclick="updateAuditStatus('${day.id}', '${exp.id}', 'approved')" title="Approve expense">
@@ -551,19 +604,19 @@ function renderWorkspace(searchQuery = '') {
           </td>
 
           <!-- Admin Remarks Note -->
-          <td>
-            <input type="text" class="cell-input" style="font-size: 0.8rem; padding: 4px; border-color: rgba(255,255,255,0.06);"
+          <td style="padding: 6px 12px;">
+            <input type="text" class="cell-input" style="font-size: 0.8rem; padding: 6px 10px; border-color: rgba(255,255,255,0.06); height: 32px;"
               value="${escapeHtml(exp.adminComment || '')}" 
               placeholder="Add audit comments..."
               oninput="updateExpenseField('${day.id}', '${exp.id}', 'adminComment', this.value)"
             />
           </td>
 
-          <!-- Delete Row Action -->
-          <td style="text-align: center;">
-            <button class="btn btn-danger btn-icon-only" onclick="deleteExpense('${day.id}', '${exp.id}')"
-              style="width: 28px; height: 28px; padding: 0; min-height: 28px; border-radius: 6px;" title="Delete row">
-              ×
+          <!-- Actions (Delete Row) -->
+          <td style="text-align: center; padding: 10px 16px;">
+            <button class="btn btn-danger btn-icon-only" onclick="deleteExpense('${day.id}', '${exp.id}')" 
+              style="width: 32px; height: 32px; min-height: 32px; padding: 4px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; background: rgba(244, 63, 94, 0.1); border-color: rgba(244, 63, 94, 0.2); color: var(--color-rose);" title="Delete Row">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
             </button>
           </td>
         `;
@@ -584,6 +637,18 @@ function renderWorkspace(searchQuery = '') {
     `;
   }
 }
+
+// Global Filter Clear Helper
+function clearAuditorFilters() {
+  const adminDatePicker = document.getElementById('adminDatePicker');
+  const adminEmpFilter = document.getElementById('adminEmpFilter');
+  const searchInput = document.getElementById('searchInput');
+  if (adminDatePicker) adminDatePicker.value = '';
+  if (adminEmpFilter) adminEmpFilter.value = '';
+  if (searchInput) searchInput.value = '';
+  renderAll();
+}
+window.clearAuditorFilters = clearAuditorFilters;
 
 // Renders the voucher column inside the desktop table row
 function renderVoucherCell(dayId, exp) {
@@ -713,6 +778,33 @@ function updateExpenseField(dayId, expId, field, value) {
   saveState();
   updateLiveTotals();
 }
+
+// Delete expense item row in Admin Console
+async function deleteExpense(dayId, expId) {
+  if (!confirm('Are you absolutely sure you want to delete this expense row from the ledger?')) return;
+  const day = findDay(dayId);
+  if (!day) return;
+
+  const idx = day.expenses.findIndex(e => e.id === expId);
+  if (idx !== -1) {
+    const exp = day.expenses[idx];
+    if (exp.voucherId) {
+      try {
+        await window.db.deleteVoucher(exp.voucherId);
+      } catch (err) {
+        console.error('Failed to delete voucher:', err);
+      }
+    }
+    
+    day.expenses.splice(idx, 1);
+    
+    // Save state and re-render everything
+    await saveState();
+    renderAll();
+    showToast('Expense item row deleted from active ledger.', 'success');
+  }
+}
+window.deleteExpense = deleteExpense;
 
 function updateDayNumber(dayId, newVal) {
   const day = findDay(dayId);
@@ -1186,7 +1278,7 @@ async function loadAccounts() {
   const tbody = document.getElementById('accountsTableBody');
   if (!tbody) return;
 
-  tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); font-size:0.8rem;">Loading accounts from database...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); font-size:0.8rem;">Loading accounts from database...</td></tr>`;
 
   try {
     const response = await fetch('/api/users');
@@ -1195,7 +1287,7 @@ async function loadAccounts() {
     if (result.success && result.users) {
       tbody.innerHTML = '';
       if (result.users.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); font-size:0.8rem;">No registered accounts found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); font-size:0.8rem;">No registered accounts found.</td></tr>`;
         return;
       }
 
@@ -1219,15 +1311,24 @@ async function loadAccounts() {
         }
 
         tr.innerHTML = `
-          <td style="font-weight:700; color:var(--text-primary); font-size:0.85rem; padding: 10px 16px;">${escapeHtml(user.loginId)}</td>
-          <td style="font-family:monospace; color:var(--text-secondary); font-size:0.85rem; padding: 10px 16px;">${escapeHtml(user.password)}</td>
-          <td style="padding: 10px 16px;">${roleBadge}</td>
-          <td style="padding: 10px 16px; font-size:0.8rem;">${activeTimeStr}</td>
-          <td style="text-align:right; padding: 10px 16px; display: flex; gap: 6px; justify-content: flex-end;">
-            <button class="status-btn" onclick="resetEmployeePassword('${user.loginId}')" style="background:rgba(16,185,129,0.1); border-color:rgba(16,185,129,0.2); color:#6ee7b7; font-size:0.7rem; padding:4px 8px;">
+          <td style="padding: 6px 12px;">
+            <input type="text" id="accName-${user.id}" class="search-input" style="height:30px; font-size:0.8rem; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.1); color:var(--text-primary); border-radius:4px; padding:0 8px; width:135px;" value="${escapeHtml(user.name || '')}" placeholder="Full Name" autocomplete="off" />
+          </td>
+          <td style="padding: 6px 12px;">
+            <input type="text" id="accCode-${user.id}" class="search-input" style="height:30px; font-size:0.8rem; font-family:monospace; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.1); color:var(--text-secondary); border-radius:4px; padding:0 8px; width:95px;" value="${escapeHtml(user.empCode || '')}" placeholder="EMP Code" autocomplete="off" />
+          </td>
+          <td style="font-weight:700; color:var(--text-primary); font-size:0.85rem; padding: 6px 12px;">${escapeHtml(user.loginId)}</td>
+          <td style="font-family:monospace; color:var(--text-secondary); font-size:0.85rem; padding: 6px 12px;">${escapeHtml(user.password)}</td>
+          <td style="padding: 6px 12px;">${roleBadge}</td>
+          <td style="padding: 6px 12px; font-size:0.8rem;">${activeTimeStr}</td>
+          <td style="text-align:right; padding: 6px 12px; display: flex; gap: 4px; justify-content: flex-end; align-items: center;">
+            <button class="status-btn" onclick="saveEmployeeProfile('${user.id}', '${user.loginId}')" style="background:rgba(16,185,129,0.15); border-color:rgba(16,185,129,0.3); color:var(--color-emerald); font-size:0.7rem; padding:4px 6px; display:inline-flex; align-items:center; gap:3px;">
+              💾 Save
+            </button>
+            <button class="status-btn" onclick="resetEmployeePassword('${user.loginId}')" style="background:rgba(16,185,129,0.1); border-color:rgba(16,185,129,0.2); color:#6ee7b7; font-size:0.7rem; padding:4px 6px;">
               ✏️ Reset
             </button>
-            <button class="status-btn" onclick="deleteAccount('${user.id}', '${user.loginId}')" style="background:rgba(239,68,68,0.1); border-color:rgba(239,68,68,0.2); color:#f87171; font-size:0.7rem; padding:4px 8px;">
+            <button class="status-btn" onclick="deleteAccount('${user.id}', '${user.loginId}')" style="background:rgba(239,68,68,0.1); border-color:rgba(239,68,68,0.2); color:#f87171; font-size:0.7rem; padding:4px 6px;">
               🗑️ Delete
             </button>
           </td>
@@ -1235,13 +1336,41 @@ async function loadAccounts() {
         tbody.appendChild(tr);
       });
     } else {
-      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#ef4444; font-size:0.8rem;">Failed to fetch accounts.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#ef4444; font-size:0.8rem;">Failed to fetch accounts.</td></tr>`;
     }
   } catch (err) {
     console.error('Fetch users error:', err);
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); font-size:0.8rem;">Running offline. Predefined accounts: admin / user</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); font-size:0.8rem;">Running offline. Predefined accounts: admin / user</td></tr>`;
   }
 }
+
+// Inline Auditor Save Employee profile
+async function saveEmployeeProfile(id, loginId) {
+  const nameVal = document.getElementById(`accName-${id}`).value.trim();
+  const codeVal = document.getElementById(`accCode-${id}`).value.trim();
+
+  try {
+    const response = await fetch(`/api/users/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: nameVal, empCode: codeVal })
+    });
+
+    const result = await response.json();
+    if (response.ok && result.success) {
+      showToast(`Successfully saved profile changes for "${loginId}"!`, 'success');
+      loadAccounts();
+      await populateEmployeeFilterDropdown();
+      renderAll();
+    } else {
+      showToast(result.error || 'Failed to save employee profile.', 'error');
+    }
+  } catch (err) {
+    console.error(err);
+    showToast('Offline Mode: Cannot save user profiles without server database.', 'error');
+  }
+}
+window.saveEmployeeProfile = saveEmployeeProfile;
 
 // Expose actions globally for inline html onclick bindings
 window.deleteAccount = deleteAccount;
@@ -1279,10 +1408,14 @@ async function resetEmployeePassword(loginId) {
 
 async function addAccount(e) {
   e.preventDefault();
+  const nameInput = document.getElementById('newName');
+  const empCodeInput = document.getElementById('newEmpCode');
   const loginIdInput = document.getElementById('newLoginId');
   const passwordInput = document.getElementById('newPassword');
   const roleInput = document.getElementById('newRole');
 
+  const name = nameInput.value.trim();
+  const empCode = empCodeInput.value.trim();
   const loginId = loginIdInput.value.trim();
   const password = passwordInput.value;
   const role = roleInput.value;
@@ -1293,16 +1426,19 @@ async function addAccount(e) {
     const response = await fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ loginId, password, role })
+      body: JSON.stringify({ loginId, password, role, name, empCode })
     });
 
     const result = await response.json();
 
     if (response.ok && result.success) {
       showToast(`User account "${loginId}" registered successfully!`, 'success');
+      nameInput.value = '';
+      empCodeInput.value = '';
       loginIdInput.value = '';
       passwordInput.value = '';
       loadAccounts();
+      await populateEmployeeFilterDropdown();
     } else {
       showToast(result.error || 'Failed to add user account.', 'error');
     }

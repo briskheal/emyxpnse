@@ -188,6 +188,14 @@ function bindEventListeners() {
     renderWorkspace(e.target.value.trim());
   });
 
+  // Clean Screen Hide Synced Toggle Listener
+  const hideSyncedToggle = document.getElementById('hideSyncedToggle');
+  if (hideSyncedToggle) {
+    hideSyncedToggle.addEventListener('change', () => {
+      renderAll();
+    });
+  }
+
   // Modal lightbox close triggers
   document.getElementById('lightboxClose').addEventListener('click', closeLightbox);
   document.getElementById('lightboxModal').addEventListener('click', (e) => {
@@ -412,11 +420,21 @@ function renderWorkspace(searchQuery = '') {
     return;
   }
 
+  // Clean Screen Synced Days Filtering
+  const hideSynced = document.getElementById('hideSyncedToggle')?.checked ?? true;
+  let daysRenderedCount = 0;
+
   container.innerHTML = '';
 
   let matchFound = false;
 
   currentMonth.days.forEach(day => {
+    // 0. Clean view: Skip rendering synced days if toggle is on
+    if (hideSynced && day.syncStatus === 'synced') {
+      return;
+    }
+    daysRenderedCount++;
+
     // Filter expenses if query is provided
     const filteredExpenses = day.expenses.filter(exp => {
       if (!searchQuery) return true;
@@ -439,7 +457,8 @@ function renderWorkspace(searchQuery = '') {
     // Sync Badge determination
     let syncBadgeHtml = '';
     const status = day.syncStatus || 'pending';
-    if (status === 'synced') {
+    const isSynced = status === 'synced';
+    if (isSynced) {
       syncBadgeHtml = `<span style="font-size:0.6rem; font-weight:700; background:rgba(16,185,129,0.15); color:var(--color-emerald); padding:3px 6px; border-radius:4px; border:1px solid rgba(16,185,129,0.3); display:inline-flex; align-items:center; gap:2px; text-transform:uppercase;">✅ Synced</span>`;
     } else if (status === 'failed') {
       syncBadgeHtml = `<span style="font-size:0.6rem; font-weight:700; background:rgba(244,63,94,0.15); color:var(--color-rose); padding:3px 6px; border-radius:4px; border:1px solid rgba(244,63,94,0.3); display:inline-flex; align-items:center; gap:2px; text-transform:uppercase;">⚠️ Failed</span>`;
@@ -451,27 +470,31 @@ function renderWorkspace(searchQuery = '') {
     card.className = 'day-card';
     card.id = day.id;
 
-    // Build Stacked Day Card HTML
+    // Build Stacked Day Card HTML (with locked elements for synced cards to prevent user modification error)
     card.innerHTML = `
       <div class="day-header">
         <div class="day-info" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-          <div class="day-badge" title="Tap to change Day value">
+          <div class="day-badge" title="${isSynced ? 'Synced & Locked' : 'Tap to change Day value'}">
             Day 
             <input type="number" value="${day.dayNumber}" min="1" max="31" 
               onchange="updateDayNumber('${day.id}', this.value)" 
               onclick="event.stopPropagation()"
+              ${isSynced ? 'disabled' : ''}
             />
           </div>
           <input type="date" class="day-date-picker" value="${day.date}" 
             onchange="updateDayDate('${day.id}', this.value)"
+            ${isSynced ? 'disabled' : ''}
           />
           ${syncBadgeHtml}
         </div>
         <div class="day-actions">
           <div class="day-subtotal">₹${dayTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-          <button class="btn btn-danger btn-icon-only" onclick="deleteDay('${day.id}')" style="width:34px; height:34px;" title="Delete Day">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-          </button>
+          ${isSynced ? '' : `
+            <button class="btn btn-danger btn-icon-only" onclick="deleteDay('${day.id}')" style="width:34px; height:34px;" title="Delete Day">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </button>
+          `}
         </div>
       </div>
       
@@ -481,12 +504,18 @@ function renderWorkspace(searchQuery = '') {
       </div>
 
       <div class="day-card-footer" style="display: flex; gap: 10px; padding: 12px 16px;">
-        <button class="btn btn-success" onclick="addExpenseItem('${day.id}')" style="flex: 1; justify-content:center; padding: 10px 14px; font-size: 0.85rem; font-weight: 700; height: 42px;">
-          ➕ Add Row Detail
-        </button>
-        <button class="btn btn-primary" onclick="syncSingleDay('${day.id}')" style="flex: 1; justify-content:center; padding: 10px 14px; font-size: 0.85rem; font-weight: 700; height: 42px; background: var(--color-indigo); border-color: rgba(99,102,241,0.35);">
-          💾 Save & Sync Day
-        </button>
+        ${isSynced ? `
+          <div style="flex: 1; text-align: center; color: var(--color-emerald); font-weight: 700; font-size: 0.85rem; padding: 10px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+            ✅ Ledger Synced & Locked
+          </div>
+        ` : `
+          <button class="btn btn-success" onclick="addExpenseItem('${day.id}')" style="flex: 1; justify-content:center; padding: 10px 14px; font-size: 0.85rem; font-weight: 700; height: 42px;">
+            ➕ Add Row Detail
+          </button>
+          <button class="btn btn-primary" onclick="syncSingleDay('${day.id}')" style="flex: 1; justify-content:center; padding: 10px 14px; font-size: 0.85rem; font-weight: 700; height: 42px; background: var(--color-indigo); border-color: rgba(99,102,241,0.35);">
+            💾 Save & Sync Day
+          </button>
+        `}
       </div>
     `;
 
@@ -517,16 +546,19 @@ function renderWorkspace(searchQuery = '') {
           <!-- Row 1: Header Bar with Serial and Delete Button -->
           <div class="item-header-bar">
             <span class="srl-cell">${serialStr}</span>
-            <button class="btn btn-danger btn-icon-only" onclick="deleteExpense('${day.id}', '${exp.id}')" 
-              style="width: 32px; height: 32px; min-height: 32px; padding: 4px; border-radius: 6px;" title="Delete row">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-            </button>
+            ${isSynced ? '' : `
+              <button class="btn btn-danger btn-icon-only" onclick="deleteExpense('${day.id}', '${exp.id}')" 
+                style="width: 32px; height: 32px; min-height: 32px; padding: 4px; border-radius: 6px;" title="Delete row">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              </button>
+            `}
           </div>
           
           <!-- Row 2: Full Width Expense Description Header -->
           <input type="text" class="cell-input" placeholder="Expense description..." 
             value="${escapeHtml(exp.name)}" 
             oninput="updateExpenseField('${day.id}', '${exp.id}', 'name', this.value)"
+            ${isSynced ? 'disabled' : ''}
           />
 
           <!-- Row 3: Mobile Voucher Section (COMES DIRECTLY BELOW EXPENSE HEADER!) -->
@@ -541,6 +573,7 @@ function renderWorkspace(searchQuery = '') {
               value="${exp.amount || ''}" 
               oninput="updateExpenseField('${day.id}', '${exp.id}', 'amount', this.value)"
               onblur="formatAmountCell(this)"
+              ${isSynced ? 'disabled' : ''}
             />
           </div>
         `;
@@ -550,6 +583,23 @@ function renderWorkspace(searchQuery = '') {
       });
     }
   });
+
+  // Custom empty state if all cards are hidden because they are synced
+  if (daysRenderedCount === 0 && currentMonth.days.length > 0) {
+    container.innerHTML = `
+      <div class="empty-state" style="padding: 40px 16px;">
+        <div class="empty-state-icon" style="color: var(--color-emerald); background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.2);">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+        </div>
+        <h3>All Ledger Days Synced</h3>
+        <p>Your logged expenses for this month are safely saved and synced to the cloud. The workspace is kept clean for your next day entries.</p>
+        <div style="display:flex; flex-direction:column; gap:10px; width: 100%;">
+          <button class="btn btn-primary" onclick="addNewDay()">➕ Start Another Day</button>
+        </div>
+      </div>
+    `;
+    return;
+  }
 
   if (searchQuery && !matchFound) {
     container.innerHTML = `
@@ -567,6 +617,9 @@ function renderVoucherCell(dayId, exp) {
   const container = document.getElementById(`voucher-cell-${exp.id}`);
   if (!container) return;
 
+  const day = findDay(dayId);
+  const isSynced = day && day.syncStatus === 'synced';
+
   if (exp.voucherId) {
     // Determine preview thumbnail
     let iconHTML = '';
@@ -583,7 +636,7 @@ function renderVoucherCell(dayId, exp) {
       <div class="voucher-cell-container">
         <div class="voucher-thumbnail-wrapper" onclick="viewVoucher('${exp.id}')" title="Tap to preview receipt">
           ${iconHTML}
-          <button class="voucher-remove-btn" onclick="event.stopPropagation(); removeVoucher('${dayId}', '${exp.id}')" title="Delete attachment">×</button>
+          ${isSynced ? '' : `<button class="voucher-remove-btn" onclick="event.stopPropagation(); removeVoucher('${dayId}', '${exp.id}')" title="Delete attachment">×</button>`}
         </div>
         <span class="voucher-meta-text">
           ${escapeHtml(exp.voucherName)}
@@ -592,16 +645,24 @@ function renderVoucherCell(dayId, exp) {
     `;
   } else {
     // Interactive File Upload Trigger (using mobile camera integrations)
-    container.innerHTML = `
-      <label class="voucher-upload-btn">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--color-indigo)">
-          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-          <circle cx="12" cy="13" r="4"></circle>
-        </svg>
-        <span>📷 Attach Voucher / Take Photo</span>
-        <input type="file" accept="image/*,application/pdf" capture="environment" onchange="uploadVoucher('${dayId}', '${exp.id}', this.files[0])" />
-      </label>
-    `;
+    if (isSynced) {
+      container.innerHTML = `
+        <div class="voucher-upload-btn disabled" style="opacity: 0.5; pointer-events: none; border-style: solid; border-color: rgba(255,255,255,0.05); color: var(--text-muted); cursor: default; background: transparent; display: flex; align-items: center; justify-content: center; width: 100%; height: 42px; border-radius: 8px;">
+          <span>📋 No Voucher Attached</span>
+        </div>
+      `;
+    } else {
+      container.innerHTML = `
+        <label class="voucher-upload-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--color-indigo)">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+            <circle cx="12" cy="13" r="4"></circle>
+          </svg>
+          <span>📷 Attach Voucher / Take Photo</span>
+          <input type="file" accept="image/*,application/pdf" capture="environment" onchange="uploadVoucher('${dayId}', '${exp.id}', this.files[0])" />
+        </label>
+      `;
+    }
   }
 }
 
