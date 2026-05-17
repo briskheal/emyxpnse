@@ -282,14 +282,6 @@ function bindAdminEvents() {
       showToast('Saving active audit progress securely...', 'info');
       await saveState();
 
-      // AUTOMATED DATA PROTECTION AUDIT BACKUP:
-      // Instantly generate and trigger a local download of the compiled audited CSV ledger backup!
-      try {
-        await exportAuditedCSV(true);
-      } catch (err) {
-        console.error('Auto Audited CSV export failed on logout:', err);
-      }
-
       // Wiping out sessions on logout to ensure absolute multi-user isolation on the same device!
       sessionStorage.removeItem('emyxpnse_user_role');
       sessionStorage.removeItem('emyxpnse_login_id');

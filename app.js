@@ -554,6 +554,47 @@ function renderWorkspace(searchQuery = '') {
         row.className = 'expense-item-row';
         row.id = exp.id;
 
+        // Dynamic Audit Verification Status & Remarks Banners
+        let auditStatusHtml = '';
+        const statusVal = (exp.auditStatus || 'pending').toLowerCase();
+        const remarkText = exp.adminComment ? exp.adminComment.trim() : '';
+
+        if (isSynced || statusVal !== 'pending') {
+          let badgeBg = 'rgba(245,158,11,0.08)';
+          let badgeBorder = 'rgba(245,158,11,0.2)';
+          let badgeColor = '#f59e0b';
+          let statusText = '⏳ Awaiting Auditor Review';
+          let icon = '⏳';
+
+          if (statusVal === 'approved') {
+            badgeBg = 'rgba(16,185,129,0.12)';
+            badgeBorder = 'rgba(16,185,129,0.3)';
+            badgeColor = '#6ee7b7';
+            statusText = 'APPROVED BY AUDITOR';
+            icon = '✅';
+          } else if (statusVal === 'flagged') {
+            badgeBg = 'rgba(239,68,68,0.12)';
+            badgeBorder = 'rgba(239,68,68,0.3)';
+            badgeColor = '#f87171';
+            statusText = 'FLAGGED / DISAPPROVED';
+            icon = '⚠️';
+          }
+
+          auditStatusHtml = `
+            <div class="audit-status-banner" style="margin-top:10px; padding:8px 12px; background:${badgeBg}; border:1px solid ${badgeBorder}; border-radius:6px; font-size:0.72rem; color:${badgeColor}; display:flex; flex-direction:column; gap:4px;">
+              <div style="font-weight:700; display:flex; align-items:center; gap:4px; letter-spacing:0.02em; text-transform:uppercase;">
+                <span>${icon}</span>
+                <span>${statusText}</span>
+              </div>
+              ${remarkText ? `
+                <div style="font-size:0.7rem; color:var(--text-secondary); margin-top:2px; font-style:italic; padding-left:16px; border-left:2px solid ${badgeColor};">
+                  <strong>Remarks:</strong> "${escapeHtml(remarkText)}"
+                </div>
+              ` : ''}
+            </div>
+          `;
+        }
+
         // Structured stacked mobile rows placing Voucher and Amount cleanly below the header input
         row.innerHTML = `
           <!-- Row 1: Header Bar with Serial and Delete Button -->
@@ -589,6 +630,9 @@ function renderWorkspace(searchQuery = '') {
               ${isSynced ? 'disabled' : ''}
             />
           </div>
+
+          <!-- Row 5: Dynamic Audit Verification Status & Remarks -->
+          ${auditStatusHtml}
         `;
 
         listContainer.appendChild(row);
