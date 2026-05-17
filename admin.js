@@ -285,10 +285,16 @@ function bindAdminEvents() {
       // AUTOMATED DATA PROTECTION AUDIT BACKUP:
       // Instantly generate and trigger a local download of the compiled audited CSV ledger backup!
       try {
-        exportAuditedCSV(true);
+        await exportAuditedCSV(true);
       } catch (err) {
         console.error('Auto Audited CSV export failed on logout:', err);
       }
+
+      // Wiping out sessions on logout to ensure absolute multi-user isolation on the same device!
+      sessionStorage.removeItem('emyxpnse_user_role');
+      sessionStorage.removeItem('emyxpnse_login_id');
+      localStorage.removeItem('emyxpnse_user_role');
+      localStorage.removeItem('emyxpnse_login_id');
 
       showToast('Admin logged out successfully.', 'success');
       setTimeout(() => {
@@ -1156,13 +1162,32 @@ async function deleteDay(dayId) {
 // Note: deleteExpense is defined above at line 782 and bound globally.
 
 // Export final Compiled Audit CSV (Including audit status verification and remarks!)
-// Export final Compiled Audit CSV (Including audit status verification and remarks!)
-function exportAuditedCSV(isAutoBackup = false) {
+async function exportAuditedCSV(isAutoBackup = false) {
   const currentMonth = state.months[state.selectedMonth];
   if (!currentMonth || currentMonth.days.length === 0) {
     if (!isAutoBackup) showToast('No data available to export.', 'error');
     return;
   }
+
+  // Load the latest profiles dynamically to resolve names and employee codes
+  let users = [];
+  try {
+    const res = await fetch('/api/users');
+    const resJson = await res.json();
+    if (resJson.success && resJson.users) {
+      users = resJson.users;
+    }
+  } catch (err) {
+    console.error('Failed to fetch user list for CSV resolution:', err);
+  }
+
+  const getEmployeeDetails = (loginId) => {
+    const user = users.find(u => u.loginId === loginId);
+    return {
+      name: user && user.name ? user.name : 'Unknown Employee',
+      empCode: user && user.empCode ? user.empCode : 'N/A'
+    };
+  };
 
   const adminDatePicker = document.getElementById('adminDatePicker');
   const adminEmpFilter = document.getElementById('adminEmpFilter');
@@ -1183,20 +1208,24 @@ function exportAuditedCSV(isAutoBackup = false) {
   }
 
   let csvContent = '\uFEFF'; // UTF-8 BOM
-  csvContent += 'Serial No,Date,Employee ID,Expense Description,Amount (INR),Receipt Filename,Audit Status,Auditor Remarks\r\n';
+  csvContent += 'Serial No,Date,Employee Code,Employee Name,Expense Description,Amount (INR),Receipt Filename,Audit Status,Auditor Remarks\r\n';
 
   filteredDays.forEach(day => {
+    // Resolve employee details dynamically
+    const empDetails = getEmployeeDetails(day.loginId);
+
     day.expenses.forEach((exp, idx) => {
       const serial = `"${day.dayNumber}.${idx + 1}"`;
       const date = `"${day.date}"`;
-      const empId = `"${day.loginId || 'N/A'}"`;
+      const empCode = `"${empDetails.empCode}"`;
+      const empName = `"${empDetails.name.replace(/"/g, '""')}"`;
       const name = `"${String(exp.name || '').replace(/"/g, '""')}"`;
       const amt = `"${(parseFloat(exp.amount) || 0).toFixed(2)}"`;
       const voucherName = `"${String(exp.voucherName || 'None').replace(/"/g, '""')}"`;
       const status = `"${String(exp.auditStatus || 'pending').toUpperCase()}"`;
       const comment = `"${String(exp.adminComment || '').replace(/"/g, '""')}"`;
 
-      csvContent += `${serial},${date},${empId},${name},${amt},${voucherName},${status},${comment}\r\n`;
+      csvContent += `${serial},${date},${empCode},${empName},${name},${amt},${voucherName},${status},${comment}\r\n`;
     });
   });
 

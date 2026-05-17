@@ -199,8 +199,17 @@ app.get('/api/ledger/:month', async (req, res) => {
   }
 
   try {
+    const { loginId, role } = req.query;
+    const queryWhere = { selectedMonth: req.params.month };
+
+    // STRICT USER DATA ISOLATION:
+    // If the role is 'user' (employee), enforce strict loginId matching to prevent data leakage!
+    if (role === 'user' && loginId) {
+      queryWhere.loginId = loginId.trim();
+    }
+
     const days = await db.ExpenseDay.findAll({
-      where: { selectedMonth: req.params.month },
+      where: queryWhere,
       include: [{ model: db.ExpenseItem, as: 'expenses' }],
       order: [
         ['dayNumber', 'ASC'],

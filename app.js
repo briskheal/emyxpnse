@@ -208,6 +208,14 @@ function bindEventListeners() {
     logoutBtn.addEventListener('click', async () => {
       showToast('Saving active drafts securely...', 'info');
       await saveState();
+
+      // STRICT MULTI-USER ISOLATION:
+      // Instantly clear active session and storage parameters to prevent credential residue on shared devices!
+      sessionStorage.removeItem('emyxpnse_user_role');
+      sessionStorage.removeItem('emyxpnse_login_id');
+      localStorage.removeItem('emyxpnse_user_role');
+      localStorage.removeItem('emyxpnse_login_id');
+
       showToast('Logged out successfully.', 'success');
       setTimeout(() => {
         location.href = 'index.html';
@@ -1119,25 +1127,44 @@ async function deleteExpense(dayId, expId) {
 }
 
 // Export sheet data to beautifully formatted CSV
-function exportToCSV() {
+async function exportToCSV() {
   const currentMonth = state.months[state.selectedMonth];
   if (!currentMonth || currentMonth.days.length === 0) {
     showToast('No data available to export.', 'error');
     return;
   }
 
+  // Load the latest profiles dynamically to resolve names and employee codes
+  let users = [];
+  try {
+    const res = await fetch('/api/users');
+    const resJson = await res.json();
+    if (resJson.success && resJson.users) {
+      users = resJson.users;
+    }
+  } catch (err) {
+    console.error('Failed to fetch user list for CSV resolution:', err);
+  }
+
+  const loginId = sessionStorage.getItem('emyxpnse_login_id') || localStorage.getItem('emyxpnse_login_id') || 'user';
+  const currentUser = users.find(u => u.loginId === loginId) || {};
+  const empName = currentUser.name || 'Unknown Employee';
+  const empCode = currentUser.empCode || 'N/A';
+
   let csvContent = '\uFEFF'; // UTF-8 BOM
-  csvContent += 'Serial No,Date,Expense Description,Amount (INR),Renamed Receipt Filename\r\n';
+  csvContent += 'Serial No,Date,Employee Code,Employee Name,Expense Description,Amount (INR),Renamed Receipt Filename\r\n';
 
   currentMonth.days.forEach(day => {
     day.expenses.forEach((exp, idx) => {
       const serial = `"${day.dayNumber}.${idx + 1}"`;
       const date = `"${day.date}"`;
-      const name = `"${(exp.name || '').replace(/"/g, '""')}"`;
-      const amt = `"${(exp.amount || 0).toFixed(2)}"`;
-      const voucherName = `"${(exp.voucherName || 'None').replace(/"/g, '""')}"`;
+      const code = `"${empCode}"`;
+      const nameCol = `"${empName.replace(/"/g, '""')}"`;
+      const name = `"${String(exp.name || '').replace(/"/g, '""')}"`;
+      const amt = `"${(parseFloat(exp.amount) || 0).toFixed(2)}"`;
+      const voucherName = `"${String(exp.voucherName || 'None').replace(/"/g, '""')}"`;
 
-      csvContent += `${serial},${date},${name},${amt},${voucherName}\r\n`;
+      csvContent += `${serial},${date},${code},${nameCol},${name},${amt},${voucherName}\r\n`;
     });
   });
 
