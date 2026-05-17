@@ -1086,9 +1086,30 @@ async function deleteExpense(dayId, expId) {
     
     day.expenses.splice(idx, 1);
     day.syncStatus = 'pending';
+
+    // AUTOMATIC EMPTY DAY CARD CLEANUP:
+    // If there are no expenses left under this day, automatically clear the day card entirely!
+    let dayCleared = false;
+    if (day.expenses.length === 0) {
+      const currentMonthKey = state.selectedMonth;
+      const currentMonth = state.months[currentMonthKey];
+      if (currentMonth && currentMonth.days) {
+        const dayIdx = currentMonth.days.findIndex(d => d.id === dayId);
+        if (dayIdx !== -1) {
+          currentMonth.days.splice(dayIdx, 1);
+          dayCleared = true;
+        }
+      }
+    }
+
     await saveState();
     renderAll();
-    showToast('Expense item row deleted.');
+    
+    if (dayCleared) {
+      showToast('Empty day card cleared automatically.', 'info');
+    } else {
+      showToast('Expense item row deleted.');
+    }
   }
 }
 

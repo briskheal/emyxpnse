@@ -798,25 +798,56 @@ async function deleteExpense(dayId, expId) {
     
     day.expenses.splice(idx, 1);
 
-    // If online, securely delete the expense item row permanently from the Supabase PostgreSQL cloud database!
+    // Check if there are no expenses left under this day, so we automatically clean up the entire day record!
+    let dayCleared = false;
+    if (day.expenses.length === 0) {
+      const currentMonthKey = state.selectedMonth;
+      const currentMonth = state.months[currentMonthKey];
+      if (currentMonth && currentMonth.days) {
+        const dayIdx = currentMonth.days.findIndex(d => d.id === dayId);
+        if (dayIdx !== -1) {
+          currentMonth.days.splice(dayIdx, 1);
+          dayCleared = true;
+        }
+      }
+    }
+
+    // If online, securely delete the record permanently from the Supabase PostgreSQL cloud database!
     if (navigator.onLine) {
       try {
-        const response = await fetch(`/api/ledger/item/${expId}`, {
-          method: 'DELETE'
-        });
-        const resJson = await response.json();
-        if (response.ok && resJson.success) {
-          console.log(`Cloud database: Deleted expense row ${expId} permanently.`);
+        if (dayCleared) {
+          // If the day is now empty, delete the entire Day Card (this automatically cascade deletes child rows on database level)
+          const response = await fetch(`/api/ledger/day/${dayId}`, {
+            method: 'DELETE'
+          });
+          const resJson = await response.json();
+          if (response.ok && resJson.success) {
+            console.log(`Cloud database: Deleted empty day card ${dayId} permanently.`);
+          }
+        } else {
+          // Otherwise, delete only this specific expense item row from the cloud database
+          const response = await fetch(`/api/ledger/item/${expId}`, {
+            method: 'DELETE'
+          });
+          const resJson = await response.json();
+          if (response.ok && resJson.success) {
+            console.log(`Cloud database: Deleted expense row ${expId} permanently.`);
+          }
         }
       } catch (netErr) {
-        console.error('Failed to delete expense row on cloud database:', netErr);
+        console.error('Failed to sync deletion on cloud database:', netErr);
       }
     }
     
     // Save state and re-render everything
     await saveState();
     renderAll();
-    showToast('Expense item row deleted from active ledger.', 'success');
+    
+    if (dayCleared) {
+      showToast('Empty day card cleared permanently from active ledger.', 'success');
+    } else {
+      showToast('Expense item row deleted from active ledger.', 'success');
+    }
   }
 }
 window.deleteExpense = deleteExpense;
