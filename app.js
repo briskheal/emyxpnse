@@ -175,12 +175,6 @@ function bindEventListeners() {
     });
   }
 
-  document.getElementById('btnResetDB').addEventListener('click', () => {
-    if (confirm('Are you absolutely sure you want to reset all expense sheets? This deletes all vouchers and historical data.')) {
-      resetDatabase();
-    }
-  });
-
 
 
   // Search input filtering
@@ -413,7 +407,7 @@ function renderWorkspace(searchQuery = '') {
         <h3>No Expenses Captured</h3>
         <p>This sheet is completely empty. Create a stacked Day card to record mobile expenses with camera uploads and automatic sequential naming.</p>
         <div style="display:flex; flex-direction:column; gap:10px; width: 100%;">
-          <button class="btn btn-primary" onclick="addNewDay()">➕ Start Day 1</button>
+          <button class="btn btn-primary" onclick="addNewDay()">➕ Start Exp Submission</button>
         </div>
       </div>
     `;
