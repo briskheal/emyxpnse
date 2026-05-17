@@ -216,6 +216,34 @@ function bindEventListeners() {
     });
   }
 
+  // 📅 Go to Date Calendar Binds
+  const btnGoToDate = document.getElementById('btnGoToDate');
+  if (btnGoToDate) {
+    btnGoToDate.addEventListener('click', openDatePickerModal);
+  }
+
+  const datePickerClose = document.getElementById('datePickerClose');
+  if (datePickerClose) {
+    datePickerClose.addEventListener('click', closeDatePickerModal);
+  }
+
+  const btnCancelDatePicker = document.getElementById('btnCancelDatePicker');
+  if (btnCancelDatePicker) {
+    btnCancelDatePicker.addEventListener('click', closeDatePickerModal);
+  }
+
+  const datePickerModal = document.getElementById('datePickerModal');
+  if (datePickerModal) {
+    datePickerModal.addEventListener('click', (e) => {
+      if (e.target.id === 'datePickerModal') closeDatePickerModal();
+    });
+  }
+
+  const goToDateForm = document.getElementById('goToDateForm');
+  if (goToDateForm) {
+    goToDateForm.addEventListener('submit', handleGoToDateSubmit);
+  }
+
   // 🔑 Employee Password Change Binds
   const btnChangePassword = document.getElementById('btnChangePassword');
   if (btnChangePassword) {
@@ -1192,4 +1220,110 @@ async function handlePasswordChange(e) {
     console.error(err);
     showToast('Offline Mode: Cannot change password without server connection.', 'error');
   }
+}
+
+// =========================================================================
+// 📅 EMPLOYEE GO TO DATE CALENDAR ENGINE
+// =========================================================================
+
+function openDatePickerModal() {
+  const activeMonth = state.selectedMonth; // format YYYY-MM
+  if (!activeMonth) {
+    showToast('Please select a valid month sheet first.', 'error');
+    return;
+  }
+
+  const [yr, mn] = activeMonth.split('-');
+  const totalDays = new Date(parseInt(yr), parseInt(mn), 0).getDate();
+  
+  const input = document.getElementById('calendarDateInput');
+  if (input) {
+    input.min = `${activeMonth}-01`;
+    input.max = `${activeMonth}-${String(totalDays).padStart(2, '0')}`;
+    
+    // Default value: check if today's date is in the selected month
+    const today = new Date();
+    const todayMonthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    if (todayMonthKey === activeMonth) {
+      input.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    } else {
+      input.value = `${activeMonth}-01`;
+    }
+  }
+  
+  const modal = document.getElementById('datePickerModal');
+  if (modal) modal.classList.add('active');
+}
+
+function closeDatePickerModal() {
+  const modal = document.getElementById('datePickerModal');
+  if (modal) {
+    modal.classList.remove('active');
+    document.getElementById('goToDateForm').reset();
+  }
+}
+
+async function handleGoToDateSubmit(e) {
+  e.preventDefault();
+  
+  const selectedDateStr = document.getElementById('calendarDateInput').value;
+  if (!selectedDateStr) return;
+
+  const currentMonthKey = state.selectedMonth;
+  const currentMonth = state.months[currentMonthKey];
+  
+  // 1. Check if card for this exact date already exists!
+  const existingDay = currentMonth.days.find(d => d.date === selectedDateStr);
+  
+  if (existingDay) {
+    closeDatePickerModal();
+    // Scroll and pulse target card to notify user!
+    setTimeout(() => {
+      const el = document.getElementById(existingDay.id);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('highlight-glow');
+        showToast('Jumping to existing date sheet!', 'success');
+        setTimeout(() => {
+          el.classList.remove('highlight-glow');
+        }, 2000);
+      }
+    }, 100);
+    return;
+  }
+  
+  // 2. If it does not exist, let's create a new card chronologically!
+  const dayNum = parseInt(selectedDateStr.split('-')[2], 10);
+  const newDay = {
+    id: `day-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    dayNumber: dayNum,
+    date: selectedDateStr,
+    expenses: []
+  };
+
+  currentMonth.days.push(newDay);
+  
+  // 3. Chronological sorting so the ledger card list is always clean and ordered!
+  currentMonth.days.sort((a, b) => a.date.localeCompare(b.date));
+
+  // Immediately add one empty item row as default
+  addExpenseItem(newDay.id);
+
+  await saveState();
+  renderAll();
+  closeDatePickerModal();
+
+  // Scroll and pulse new card!
+  setTimeout(() => {
+    const el = document.getElementById(newDay.id);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('highlight-glow');
+      setTimeout(() => {
+        el.classList.remove('highlight-glow');
+      }, 2000);
+    }
+  }, 200);
+
+  showToast(`Created Day ${dayNum} sheet successfully!`, 'success');
 }

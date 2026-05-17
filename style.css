@@ -1074,3 +1074,33 @@ body {
 .print-summary {
   display: none;
 }
+
+/* Card Highlight Jump Glow Animation */
+.day-card.highlight-glow {
+  animation: cardPulseGlow 2s ease-out;
+  border-color: var(--color-emerald) !important;
+  box-shadow: 0 0 25px rgba(16, 185, 129, 0.45);
+}
+
+@keyframes cardPulseGlow {
+  0% {
+    box-shadow: 0 0 0px rgba(16, 185, 129, 0);
+    border-color: var(--border-color);
+  }
+  20% {
+    box-shadow: 0 0 30px rgba(16, 185, 129, 0.6);
+    border-color: var(--color-emerald);
+  }
+  40% {
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+    border-color: var(--color-emerald);
+  }
+  60% {
+    box-shadow: 0 0 25px rgba(16, 185, 129, 0.5);
+    border-color: var(--color-emerald);
+  }
+  100% {
+    box-shadow: var(--glass-shadow);
+    border-color: var(--border-color);
+  }
+}
