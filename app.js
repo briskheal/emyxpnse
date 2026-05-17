@@ -1,0 +1,1092 @@
+/**
+ * app.js
+ * EmyXpnse - High Density Mobile-First Core Application Engine
+ * Integrates IndexedDB, reactive totals recalculations, high-fidelity card UI rendering,
+ * camera-friendly inputs, sequential mobile auto-renaming, and print exports.
+ */
+
+// Application Master State
+let state = {
+  selectedMonth: '', // format YYYY-MM
+  months: {} // holds month keys: { days: [ { id, dayNumber, date, expenses: [...] } ] }
+};
+
+// Available Mock Receipt Categories
+const MOCK_CATEGORIES = [
+  { name: 'Office Rent', merchant: 'Emyris Properties Ltd', items: [{ name: 'Shared Office Co-Working Spaces', price: 15000 }], tax: 2700, total: 17700 },
+  { name: 'AWS Cloud Servers', merchant: 'Amazon Web Services', items: [{ name: 'EC2 Instances & S3 Storage', price: 3400 }, { name: 'RDS Postgres Database Instance', price: 1200 }], tax: 828, total: 5428 },
+  { name: 'Client Dinner', merchant: 'Grand Imperial Bistro', items: [{ name: 'Gourmet Dinner Meeting (4 Pax)', price: 4200 }, { name: 'Refreshments & Desserts', price: 800 }], tax: 900, total: 5900 },
+  { name: 'Office High-Speed Internet', merchant: 'Airtel Enterprise Fiber', items: [{ name: 'Gigabit Business Leased Line', price: 1800 }], tax: 324, total: 2124 },
+  { name: 'Airport Taxi Travel', merchant: 'Ola Corporate Cab', items: [{ name: 'Airport Transit - Round Trip', price: 1450 }], tax: 261, total: 1711 },
+  { name: 'Stationery & Printing', merchant: 'Staples Business Depot', items: [{ name: 'A4 Copier Paper Bundles (5x)', price: 950 }, { name: 'Printer Toner Cartridge', price: 2100 }], tax: 549, total: 3599 }
+];
+
+// Initialize application on DOM load
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    // 1. Initialize IndexedDB database connection
+    await window.db.init();
+
+    // 2. Load stored state from IndexedDB
+    const savedData = await window.db.getSheetData();
+    if (savedData && savedData.months) {
+      state = savedData;
+    } else {
+      // Default to current month
+      const today = new Date();
+      const currentMonthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+      state.selectedMonth = currentMonthKey;
+      state.months = {
+        [currentMonthKey]: { days: [] }
+      };
+      await saveState();
+    }
+
+    // 3. Populate month selector options
+    populateMonthSelector();
+
+    // 4. Bind event listeners
+    bindEventListeners();
+
+    // 5. Initial render cycle
+    renderAll();
+    
+    showToast('Mobile Expense Dashboard Ready', 'success');
+  } catch (err) {
+    console.error('App start failure:', err);
+    showToast('Failed to load database. Working in memory.', 'error');
+  }
+});
+
+// Save current state back to IndexedDB (debounced/handled async)
+async function saveState() {
+  try {
+    // DYNAMIC DUAL-PORTAL VOUCHER RE-INDEXING:
+    // Automatically re-indexes and renames all voucher filenames sequentially inside their day card
+    // whenever a row is inserted, deleted, or re-ordered. This guarantees gallery screenshots
+    // are renamed to perfect clean matches (e.g. expense1, expense2) aligning with their row numbers!
+    Object.values(state.months).forEach(month => {
+      if (month && month.days) {
+        month.days.forEach(day => {
+          if (day && day.expenses) {
+            day.expenses.forEach((exp, idx) => {
+              if (exp.voucherId && exp.voucherName) {
+                const fileExt = (exp.voucherName.split('.').pop() || 'jpg').toLowerCase();
+                exp.voucherName = `expense${idx + 1}.${fileExt}`;
+              }
+            });
+          }
+        });
+      }
+    });
+
+    await window.db.saveSheetData(state);
+  } catch (err) {
+    console.error('Error saving state to DB:', err);
+  }
+}
+
+// Generate Month Option Items dynamically based on state and padding
+function populateMonthSelector() {
+  const selector = document.getElementById('monthSelector');
+  if (!selector) return;
+
+  const currentYear = new Date().getFullYear();
+  const availableMonths = new Set(Object.keys(state.months));
+  
+  // Always ensure current month, past 4 months, and next 2 months are listed
+  const today = new Date();
+  for (let i = -4; i <= 2; i++) {
+    const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    availableMonths.add(key);
+  }
+
+  // Sort months descending
+  const sortedMonths = Array.from(availableMonths).sort((a, b) => b.localeCompare(a));
+
+  selector.innerHTML = '';
+  sortedMonths.forEach(mKey => {
+    const [year, month] = mKey.split('-');
+    const dateObj = new Date(parseInt(year), parseInt(month) - 1, 1);
+    const label = dateObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    
+    const option = document.createElement('option');
+    option.value = mKey;
+    option.textContent = label;
+    selector.appendChild(option);
+  });
+
+  selector.value = state.selectedMonth;
+}
+
+// Bind Global UI Actions
+function bindEventListeners() {
+  // Month selector dropdown change
+  document.getElementById('monthSelector').addEventListener('change', (e) => {
+    state.selectedMonth = e.target.value;
+    if (!state.months[state.selectedMonth]) {
+      state.months[state.selectedMonth] = { days: [] };
+    }
+    saveState();
+    renderAll();
+    showToast(`Switched sheet to: ${e.target.selectedOptions[0].textContent}`);
+  });
+
+  // Main global interaction buttons
+  document.getElementById('btnAddDay').addEventListener('click', () => {
+    addNewDay();
+  });
+
+  document.getElementById('btnExportCSV').addEventListener('click', () => {
+    exportToCSV();
+  });
+
+  const exportAdminBtn = document.getElementById('btnExportAdmin');
+  if (exportAdminBtn) {
+    exportAdminBtn.addEventListener('click', () => {
+      exportToAdminJSON();
+    });
+  }
+
+  const printBtn = document.getElementById('btnPrintReport');
+  if (printBtn) {
+    printBtn.addEventListener('click', () => {
+      window.print();
+    });
+  }
+
+  document.getElementById('btnResetDB').addEventListener('click', () => {
+    if (confirm('Are you absolutely sure you want to reset all expense sheets? This deletes all vouchers and historical data.')) {
+      resetDatabase();
+    }
+  });
+
+  document.getElementById('btnGenerateMock').addEventListener('click', () => {
+    generateMockData();
+  });
+
+  // Search input filtering
+  document.getElementById('searchInput').addEventListener('input', (e) => {
+    renderWorkspace(e.target.value.trim());
+  });
+
+  // Modal lightbox close triggers
+  document.getElementById('lightboxClose').addEventListener('click', closeLightbox);
+  document.getElementById('lightboxModal').addEventListener('click', (e) => {
+    if (e.target.id === 'lightboxModal') closeLightbox();
+  });
+
+  // Logout & Exit application securely
+  const logoutBtn = document.getElementById('btnLogout');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async () => {
+      showToast('Saving active drafts securely...', 'info');
+      await saveState();
+
+      // AUTOMATED DATA PROTECTION BACKUP:
+      // Instantly generate and trigger a local download of the active month's CSV backup!
+      try {
+        exportToCSV();
+      } catch (err) {
+        console.error('Auto CSV export failed on logout:', err);
+      }
+
+      showToast('Logged out successfully.', 'success');
+      setTimeout(() => {
+        location.href = 'index.html';
+      }, 1000);
+    });
+  }
+}
+
+// Add a new Day Card to the current sheet
+function addNewDay() {
+  const currentMonth = state.months[state.selectedMonth];
+  const dayCount = currentMonth.days.length;
+  
+  // Calculate next sequential Day Number
+  let nextDayNum = 1;
+  if (dayCount > 0) {
+    const maxDayNum = Math.max(...currentMonth.days.map(d => d.dayNumber || 0));
+    nextDayNum = maxDayNum + 1;
+  }
+
+  // Calculate default date matching the month
+  const [year, month] = state.selectedMonth.split('-');
+  const targetDay = Math.min(nextDayNum, new Date(parseInt(year), parseInt(month), 0).getDate());
+  const defaultDateStr = `${year}-${month}-${String(targetDay).padStart(2, '0')}`;
+
+  const newDay = {
+    id: `day-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    dayNumber: nextDayNum,
+    date: defaultDateStr,
+    expenses: []
+  };
+
+  currentMonth.days.push(newDay);
+  
+  // Immediately add one empty item row as default
+  addExpenseItem(newDay.id);
+
+  saveState();
+  renderAll();
+  
+  // Scroll to bottom of workspace to focus the newly added Day
+  setTimeout(() => {
+    const el = document.getElementById(newDay.id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, 100);
+
+  showToast(`Created Day ${nextDayNum} ledger`, 'success');
+}
+
+// Add a single expense line item under a specific day
+function addExpenseItem(dayId) {
+  const day = findDay(dayId);
+  if (!day) return;
+
+  const newItem = {
+    id: `exp-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    name: '',
+    amount: 0,
+    voucherId: null,
+    voucherName: '',
+    voucherType: '',
+    voucherSize: ''
+  };
+
+  day.expenses.push(newItem);
+  saveState();
+  renderAll();
+}
+
+// Helper to look up a Day by ID in current active month
+function findDay(dayId) {
+  return state.months[state.selectedMonth].days.find(d => d.id === dayId);
+}
+
+// Global state reset trigger
+async function resetDatabase() {
+  try {
+    await window.db.clearAll();
+    const today = new Date();
+    const currentMonthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    state = {
+      selectedMonth: currentMonthKey,
+      months: {
+        [currentMonthKey]: { days: [] }
+      }
+    };
+    await saveState();
+    populateMonthSelector();
+    renderAll();
+    showToast('Database reset successfully.', 'success');
+  } catch (err) {
+    showToast('Reset failed.', 'error');
+  }
+}
+
+// Render entire board and sync summaries
+function renderAll() {
+  renderWorkspace();
+  updateSidebarMetrics();
+}
+
+// Render Main Sheet Canvas (Mobile Optimized Stacked List)
+function renderWorkspace(searchQuery = '') {
+  const container = document.getElementById('workspaceContainer');
+  if (!container) return;
+
+  const currentMonth = state.months[state.selectedMonth];
+  
+  if (!currentMonth || currentMonth.days.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+        </div>
+        <h3>No Expenses Captured</h3>
+        <p>This sheet is completely empty. Create a stacked Day card to record mobile expenses with camera uploads and automatic sequential naming.</p>
+        <div style="display:flex; flex-direction:column; gap:10px; width: 100%;">
+          <button class="btn btn-primary" onclick="addNewDay()">➕ Start Day 1</button>
+          <button class="btn" onclick="generateMockData()" style="border-color:rgba(16,185,129,0.3); color:var(--color-emerald)">⚡ Load Demo Receipts</button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = '';
+
+  let matchFound = false;
+
+  currentMonth.days.forEach(day => {
+    // Filter expenses if query is provided
+    const filteredExpenses = day.expenses.filter(exp => {
+      if (!searchQuery) return true;
+      const term = searchQuery.toLowerCase();
+      const serial = `${day.dayNumber}.${day.expenses.indexOf(exp) + 1}`;
+      return exp.name.toLowerCase().includes(term) || 
+             serial.includes(term) || 
+             exp.amount.toString().includes(term);
+    });
+
+    if (searchQuery && filteredExpenses.length === 0) {
+      return; 
+    }
+    
+    matchFound = true;
+
+    // Calculate Day Subtotal
+    const dayTotal = day.expenses.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+
+    const card = document.createElement('div');
+    card.className = 'day-card';
+    card.id = day.id;
+
+    // Build Stacked Day Card HTML
+    card.innerHTML = `
+      <div class="day-header">
+        <div class="day-info">
+          <div class="day-badge" title="Tap to change Day value">
+            Day 
+            <input type="number" value="${day.dayNumber}" min="1" max="31" 
+              onchange="updateDayNumber('${day.id}', this.value)" 
+              onclick="event.stopPropagation()"
+            />
+          </div>
+          <input type="date" class="day-date-picker" value="${day.date}" 
+            onchange="updateDayDate('${day.id}', this.value)"
+          />
+        </div>
+        <div class="day-actions">
+          <div class="day-subtotal">₹${dayTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+          <button class="btn btn-danger btn-icon-only" onclick="deleteDay('${day.id}')" style="width:34px; height:34px;" title="Delete Day">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          </button>
+        </div>
+      </div>
+      
+      <!-- STACKED MOBILE LIST CONTAINER -->
+      <div class="expense-mobile-list" id="mobile-list-${day.id}">
+        <!-- Item rows render dynamically -->
+      </div>
+
+      <div class="day-card-footer">
+        <button class="btn btn-success" onclick="addExpenseItem('${day.id}')" style="width:100%; justify-content:center;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          Add Expense Detail
+        </button>
+      </div>
+    `;
+
+    container.appendChild(card);
+
+    // Render mobile expense stacked cards inside list container
+    const listContainer = document.getElementById(`mobile-list-${day.id}`);
+    const itemsToRender = searchQuery ? filteredExpenses : day.expenses;
+
+    if (itemsToRender.length === 0) {
+      listContainer.innerHTML = `
+        <div style="text-align: center; color: var(--text-muted); font-size: 0.75rem; padding: 20px 10px;">
+          No expense rows added. Tap 'Add Expense Detail' to begin.
+        </div>
+      `;
+    } else {
+      day.expenses.forEach((exp, idx) => {
+        // If searching, only render items that match
+        if (searchQuery && !filteredExpenses.includes(exp)) return;
+
+        const serialStr = `${day.dayNumber}.${idx + 1}`;
+        const row = document.createElement('div');
+        row.className = 'expense-item-row';
+        row.id = exp.id;
+
+        // Structured stacked mobile rows placing Voucher and Amount cleanly below the header input
+        row.innerHTML = `
+          <!-- Row 1: Header Bar with Serial and Delete Button -->
+          <div class="item-header-bar">
+            <span class="srl-cell">${serialStr}</span>
+            <button class="btn btn-danger btn-icon-only" onclick="deleteExpense('${day.id}', '${exp.id}')" 
+              style="width: 32px; height: 32px; min-height: 32px; padding: 4px; border-radius: 6px;" title="Delete row">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </button>
+          </div>
+          
+          <!-- Row 2: Full Width Expense Description Header -->
+          <input type="text" class="cell-input" placeholder="Expense description..." 
+            value="${escapeHtml(exp.name)}" 
+            oninput="updateExpenseField('${day.id}', '${exp.id}', 'name', this.value)"
+          />
+
+          <!-- Row 3: Mobile Voucher Section (COMES DIRECTLY BELOW EXPENSE HEADER!) -->
+          <div class="item-voucher-box" id="voucher-cell-${exp.id}">
+            <!-- Voucher upload or preview thumbnail is rendered here -->
+          </div>
+
+          <!-- Row 4: Touch-friendly Amount input -->
+          <div class="item-amount-box">
+            <span class="amount-currency-label">₹</span>
+            <input type="number" class="cell-input number-input" step="0.01" min="0" placeholder="0.00" 
+              value="${exp.amount || ''}" 
+              oninput="updateExpenseField('${day.id}', '${exp.id}', 'amount', this.value)"
+              onblur="formatAmountCell(this)"
+            />
+          </div>
+        `;
+
+        listContainer.appendChild(row);
+        renderVoucherCell(day.id, exp);
+      });
+    }
+  });
+
+  if (searchQuery && !matchFound) {
+    container.innerHTML = `
+      <div class="empty-state" style="padding: 40px 16px;">
+        <h3>No match found</h3>
+        <p>No expense description, serial, or amount matches "${escapeHtml(searchQuery)}" inside the ${state.selectedMonth} sheet.</p>
+        <button class="btn btn-primary" onclick="document.getElementById('searchInput').value = ''; renderWorkspace();">Reset Filter</button>
+      </div>
+    `;
+  }
+}
+
+// Render dynamic voucher upload container under the description
+function renderVoucherCell(dayId, exp) {
+  const container = document.getElementById(`voucher-cell-${exp.id}`);
+  if (!container) return;
+
+  if (exp.voucherId) {
+    // Determine preview thumbnail
+    let iconHTML = '';
+    if (exp.voucherType.startsWith('image/')) {
+      iconHTML = `<img class="voucher-thumbnail" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'><rect width='100%25' height='100%25' fill='%23111827'/><circle cx='18' cy='18' r='6' fill='%236366f1'/></svg>" id="thumb-img-${exp.id}" alt="thumbnail"/>`;
+      // Load actual base64 image from IndexedDB asynchronously for better grid load performance
+      loadVoucherThumbnail(exp.id);
+    } else {
+      // PDF or general document icon
+      iconHTML = `<span class="voucher-file-icon">📄</span>`;
+    }
+
+    container.innerHTML = `
+      <div class="voucher-cell-container">
+        <div class="voucher-thumbnail-wrapper" onclick="viewVoucher('${exp.id}')" title="Tap to preview receipt">
+          ${iconHTML}
+          <button class="voucher-remove-btn" onclick="event.stopPropagation(); removeVoucher('${dayId}', '${exp.id}')" title="Delete attachment">×</button>
+        </div>
+        <span class="voucher-meta-text">
+          ${escapeHtml(exp.voucherName)}
+        </span>
+      </div>
+    `;
+  } else {
+    // Interactive File Upload Trigger (using mobile camera integrations)
+    container.innerHTML = `
+      <label class="voucher-upload-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--color-indigo)">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+          <circle cx="12" cy="13" r="4"></circle>
+        </svg>
+        <span>📷 Attach Voucher / Take Photo</span>
+        <input type="file" accept="image/*,application/pdf" capture="environment" onchange="uploadVoucher('${dayId}', '${exp.id}', this.files[0])" />
+      </label>
+    `;
+  }
+}
+
+// Asynchronously load heavy base64 to image element
+async function loadVoucherThumbnail(expId) {
+  try {
+    const base64 = await window.db.getVoucher(`v-${expId}`);
+    if (base64) {
+      const img = document.getElementById(`thumb-img-${expId}`);
+      if (img) img.src = base64;
+    }
+  } catch (err) {
+    console.error('Failed to load thumbnail:', err);
+  }
+}
+
+// Handle Day fields edit
+function updateDayNumber(dayId, newVal) {
+  const day = findDay(dayId);
+  if (!day) return;
+  const num = parseInt(newVal) || 1;
+  day.dayNumber = num;
+  saveState();
+  renderAll(); // Renders all to update serial indices reactively
+}
+
+function updateDayDate(dayId, newVal) {
+  const day = findDay(dayId);
+  if (!day) return;
+  day.date = newVal;
+  saveState();
+  renderAll();
+}
+
+// Handle inline sheet cell edits
+function updateExpenseField(dayId, expId, field, value) {
+  const day = findDay(dayId);
+  if (!day) return;
+  const expense = day.expenses.find(e => e.id === expId);
+  if (!expense) return;
+
+  if (field === 'amount') {
+    expense.amount = parseFloat(value) || 0;
+  } else {
+    expense.name = value;
+  }
+
+  // Save silently to DB, update totals in place for high density speed
+  saveState();
+  updateLiveTotals();
+}
+
+// Simple blur amount formatting
+function formatAmountCell(input) {
+  const val = parseFloat(input.value);
+  if (!isNaN(val)) {
+    input.value = val.toFixed(2);
+  }
+}
+
+// Update Totals on Keypress instantly without re-rendering tables (avoid input lag!)
+function updateLiveTotals() {
+  const currentMonth = state.months[state.selectedMonth];
+  if (!currentMonth) return;
+
+  let grandTotal = 0;
+
+  currentMonth.days.forEach(day => {
+    const dayTotal = day.expenses.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+    grandTotal += dayTotal;
+
+    // Update individual day subtotal elements directly in DOM
+    const cardEl = document.getElementById(day.id);
+    if (cardEl) {
+      const subtotalEl = cardEl.querySelector('.day-subtotal');
+      if (subtotalEl) {
+        subtotalEl.textContent = `₹${dayTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+      }
+    }
+  });
+
+  // Update Footer totals in DOM
+  const totalDisplay = document.getElementById('footerGrandTotal');
+  if (totalDisplay) {
+    totalDisplay.textContent = `₹${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+  }
+
+  // Update sidebar totals in DOM
+  const sidebarTotal = document.getElementById('sidebarMonthTotal');
+  if (sidebarTotal) {
+    sidebarTotal.textContent = `₹${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+  }
+
+  // Live refresh category breakdown
+  renderCategoryBreakdown(currentMonth);
+}
+
+// Complete UI Metrics rendering inside sidebar
+async function updateSidebarMetrics() {
+  const currentMonth = state.months[state.selectedMonth];
+  const sidebarTotal = document.getElementById('sidebarMonthTotal');
+  const sidebarDayCount = document.getElementById('sidebarDayCount');
+  const sidebarVoucherCount = document.getElementById('sidebarVoucherCount');
+  const footerTotal = document.getElementById('footerGrandTotal');
+  
+  if (!currentMonth) return;
+
+  // Calcul totals
+  let grandTotal = 0;
+  let totalItems = 0;
+  let voucherCount = 0;
+  
+  currentMonth.days.forEach(day => {
+    grandTotal += day.expenses.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+    totalItems += day.expenses.length;
+    voucherCount += day.expenses.filter(e => e.voucherId).length;
+  });
+
+  // Populate basic text metrics
+  if (sidebarTotal) sidebarTotal.textContent = `₹${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+  if (sidebarDayCount) sidebarDayCount.textContent = currentMonth.days.length;
+  if (sidebarVoucherCount) sidebarVoucherCount.textContent = voucherCount;
+  if (footerTotal) footerTotal.textContent = `₹${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+
+  // Populate dynamic category horizontal chart
+  renderCategoryBreakdown(currentMonth);
+}
+
+// Generate category grouping and render progress charts
+function renderCategoryBreakdown(monthData) {
+  const chartContainer = document.getElementById('categoryChartContainer');
+  if (!chartContainer) return;
+
+  // Aggregate category spends
+  const categories = {};
+  monthData.days.forEach(day => {
+    day.expenses.forEach(exp => {
+      const rawName = exp.name.trim() || 'Uncategorized';
+      let catName = 'General';
+      
+      const lower = rawName.toLowerCase();
+      if (lower.includes('rent') || lower.includes('office space')) catName = 'Office Rent';
+      else if (lower.includes('aws') || lower.includes('server') || lower.includes('cloud') || lower.includes('software')) catName = 'Software / Cloud';
+      else if (lower.includes('taxi') || lower.includes('cab') || lower.includes('ola') || lower.includes('uber') || lower.includes('travel') || lower.includes('flight')) catName = 'Travel / Logistics';
+      else if (lower.includes('lunch') || lower.includes('dinner') || lower.includes('food') || lower.includes('snacks') || lower.includes('tea')) catName = 'Food & Catering';
+      else if (lower.includes('stationery') || lower.includes('paper') || lower.includes('toner') || lower.includes('printing')) catName = 'Office Supplies';
+      else if (rawName !== 'Uncategorized') {
+        catName = rawName.split(' ')[0];
+        catName = catName.charAt(0).toUpperCase() + catName.slice(1).toLowerCase();
+      } else {
+        catName = 'Uncategorized';
+      }
+
+      categories[catName] = (categories[catName] || 0) + (parseFloat(exp.amount) || 0);
+    });
+  });
+
+  const categoryEntries = Object.entries(categories).sort((a, b) => b[1] - a[1]);
+
+  if (categoryEntries.length === 0) {
+    chartContainer.innerHTML = `<div class="empty-analytics-msg">No expense analysis details entered.</div>`;
+    return;
+  }
+
+  const maxVal = Math.max(...categoryEntries.map(e => e[1])) || 1;
+
+  chartContainer.innerHTML = '';
+  categoryEntries.forEach(([name, amt]) => {
+    if (amt === 0) return;
+    const pct = (amt / maxVal) * 100;
+    
+    const row = document.createElement('div');
+    row.className = 'category-row';
+    row.innerHTML = `
+      <div class="category-row-header">
+        <span class="category-name">${escapeHtml(name)}</span>
+        <span class="category-amt">₹${amt.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+      </div>
+      <div class="category-progress-bar">
+        <div class="category-progress-fill" style="width: ${pct}%"></div>
+      </div>
+    `;
+    chartContainer.appendChild(row);
+  });
+}
+
+// Handle File upload inside row (WITH AUTOMATED MOBILE RENAMING)
+async function uploadVoucher(dayId, expId, file) {
+  if (!file) return;
+
+  // File validator
+  const maxSize = 3 * 1024 * 1024; // 3MB limit
+  if (file.size > maxSize) {
+    showToast('File too large. Max attachment size is 3MB.', 'error');
+    return;
+  }
+
+  showToast('Processing photo...', 'info');
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const base64Data = e.target.result;
+      const voucherId = `v-${expId}`;
+
+      // Save voucher binary inside IndexedDB
+      await window.db.saveVoucher(voucherId, base64Data);
+
+      // Save metadata in active state
+      const day = findDay(dayId);
+      if (day) {
+        const exp = day.expenses.find(item => item.id === expId);
+        if (exp) {
+          // EXCLUSIVE MOBILE RENAMING: auto renaming file to expense1, expense2, expense3 based on position index
+          const itemIndex = day.expenses.indexOf(exp);
+          const serialSuffix = itemIndex !== -1 ? (itemIndex + 1) : 1;
+          const fileExt = file.name.split('.').pop() || 'jpg';
+          const customRenamedName = `expense${serialSuffix}.${fileExt}`;
+
+          exp.voucherId = voucherId;
+          exp.voucherName = customRenamedName; // Saved beautifully as clean sequential filename!
+          exp.voucherType = file.type;
+          exp.voucherSize = formatBytes(file.size);
+        }
+      }
+
+      await saveState();
+      renderAll();
+      showToast('Voucher attached successfully.', 'success');
+    } catch (err) {
+      console.error(err);
+      showToast('Attachment processing failed.', 'error');
+    }
+  };
+
+  reader.onerror = () => showToast('Failed to read file.', 'error');
+  reader.readAsDataURL(file);
+}
+
+// Remove voucher attachment
+async function removeVoucher(dayId, expId) {
+  if (!confirm('Are you sure you want to remove this receipt attachment?')) return;
+
+  try {
+    await window.db.deleteVoucher(`v-${expId}`);
+
+    const day = findDay(dayId);
+    if (day) {
+      const exp = day.expenses.find(item => item.id === expId);
+      if (exp) {
+        exp.voucherId = null;
+        exp.voucherName = '';
+        exp.voucherType = '';
+        exp.voucherSize = '';
+      }
+    }
+
+    await saveState();
+    renderAll();
+    showToast('Voucher receipt removed.');
+  } catch (err) {
+    showToast('Removal failed.', 'error');
+  }
+}
+
+// Lightbox preview viewer
+async function viewVoucher(expId) {
+  const modal = document.getElementById('lightboxModal');
+  const details = document.getElementById('lightboxDetails');
+  const frameContainer = document.getElementById('lightboxFrame');
+
+  if (!modal || !frameContainer) return;
+
+  // Find expense item anywhere in state to get metadata
+  let targetExp = null;
+  Object.values(state.months).forEach(m => {
+    m.days.forEach(d => {
+      const found = d.expenses.find(e => e.id === expId);
+      if (found) targetExp = found;
+    });
+  });
+
+  if (!targetExp) return;
+
+  showToast('Loading image preview...', 'info');
+
+  try {
+    const base64Data = await window.db.getVoucher(`v-${expId}`);
+    if (!base64Data) {
+      showToast('Voucher receipt not found.', 'error');
+      return;
+    }
+
+    details.innerHTML = `
+      <div class="lightbox-title">${escapeHtml(targetExp.voucherName)}</div>
+      <div class="lightbox-meta">${targetExp.name || 'No Description'} • ${targetExp.voucherSize} • Amount: ₹${targetExp.amount.toFixed(2)}</div>
+    `;
+
+    // Render depending on MIME type
+    if (targetExp.voucherType.startsWith('image/')) {
+      frameContainer.innerHTML = `<img class="lightbox-preview" src="${base64Data}" alt="voucher fullsize"/>`;
+    } else if (targetExp.voucherType === 'application/pdf') {
+      frameContainer.innerHTML = `<iframe class="lightbox-preview" src="${base64Data}" style="width: 100%; height: 50vh; border:none;"></iframe>`;
+    } else {
+      frameContainer.innerHTML = `
+        <div class="lightbox-file-placeholder">
+          <span style="font-size:2.5rem;">📄</span>
+          <span>Receipt document file format.</span>
+        </div>
+      `;
+    }
+
+    // Set download button URL
+    document.getElementById('lightboxDownloadBtn').href = base64Data;
+    document.getElementById('lightboxDownloadBtn').setAttribute('download', targetExp.voucherName);
+
+    modal.classList.add('active');
+  } catch (err) {
+    console.error(err);
+    showToast('Failed to open lightbox.', 'error');
+  }
+}
+
+function closeLightbox() {
+  const modal = document.getElementById('lightboxModal');
+  if (modal) modal.classList.remove('active');
+}
+
+// Delete Day card completely
+async function deleteDay(dayId) {
+  if (!confirm('Are you sure you want to delete this entire Day card and all its details?')) return;
+
+  const currentMonth = state.months[state.selectedMonth];
+  const idx = currentMonth.days.findIndex(d => d.id === dayId);
+  if (idx !== -1) {
+    const day = currentMonth.days[idx];
+    for (const exp of day.expenses) {
+      if (exp.voucherId) {
+        await window.db.deleteVoucher(exp.voucherId);
+      }
+    }
+
+    currentMonth.days.splice(idx, 1);
+    await saveState();
+    renderAll();
+    showToast('Day card deleted.');
+  }
+}
+
+// Delete expense item row
+async function deleteExpense(dayId, expId) {
+  const day = findDay(dayId);
+  if (!day) return;
+
+  const idx = day.expenses.findIndex(e => e.id === expId);
+  if (idx !== -1) {
+    const exp = day.expenses[idx];
+    if (exp.voucherId) {
+      await window.db.deleteVoucher(exp.voucherId);
+    }
+    
+    day.expenses.splice(idx, 1);
+    await saveState();
+    renderAll();
+    showToast('Expense item row deleted.');
+  }
+}
+
+// Export sheet data to beautifully formatted CSV
+function exportToCSV() {
+  const currentMonth = state.months[state.selectedMonth];
+  if (!currentMonth || currentMonth.days.length === 0) {
+    showToast('No data available to export.', 'error');
+    return;
+  }
+
+  let csvContent = '\uFEFF'; // UTF-8 BOM
+  csvContent += 'Serial No,Date,Expense Description,Amount (INR),Renamed Receipt Filename\r\n';
+
+  currentMonth.days.forEach(day => {
+    day.expenses.forEach((exp, idx) => {
+      const serial = `"${day.dayNumber}.${idx + 1}"`;
+      const date = `"${day.date}"`;
+      const name = `"${(exp.name || '').replace(/"/g, '""')}"`;
+      const amt = `"${(exp.amount || 0).toFixed(2)}"`;
+      const voucherName = `"${(exp.voucherName || 'None').replace(/"/g, '""')}"`;
+
+      csvContent += `${serial},${date},${name},${amt},${voucherName}\r\n`;
+    });
+  });
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `EmyXpnse-Report-${state.selectedMonth}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  showToast('CSV report downloaded successfully.', 'success');
+}
+
+// Core SVG mock receipt invoice builder
+function generateSVGReceipt(merchant, items, tax, total, date) {
+  const itemRows = items.map((item, idx) => `
+    <text x="30" y="${180 + idx * 25}" fill="#94a3b8" font-size="14" font-family="Inter">${item.name}</text>
+    <text x="370" y="${180 + idx * 25}" fill="#f8fafc" font-size="14" font-family="Inter" font-weight="600" text-anchor="end">₹${item.price.toFixed(2)}</text>
+  `).join('');
+  
+  const height = 250 + items.length * 28;
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 ${height}" width="400" height="${height}">
+      <rect width="100%" height="100%" fill="#0b0f19" rx="16" stroke="rgba(255,255,255,0.06)" stroke-width="2"/>
+      <circle cx="200" cy="50" r="140" fill="rgba(99,102,241,0.08)" filter="blur(40px)" />
+      <rect x="30" y="32" width="44" height="44" rx="10" fill="rgba(99,102,241,0.1)" stroke="rgba(99,102,241,0.3)" stroke-width="1"/>
+      <text x="43" y="60" fill="#6366f1" font-size="20" font-family="Outfit" font-weight="900">E</text>
+      <text x="90" y="48" fill="#f8fafc" font-size="16" font-family="Outfit" font-weight="700">${escapeHtml(merchant)}</text>
+      <text x="90" y="68" fill="#64748b" font-size="11" font-family="Inter" font-weight="600" letter-spacing="1">EXPENSE VOUCHER DEPT</text>
+      <line x1="30" y1="100" x2="370" y2="100" stroke="rgba(255,255,255,0.06)" stroke-width="2" stroke-dasharray="6 4" />
+      <text x="30" y="130" fill="#64748b" font-size="12" font-family="Inter" font-weight="600">INVOICE NO:</text>
+      <text x="120" y="130" fill="#cbd5e1" font-size="12" font-family="Inter" font-weight="700">TXN-${Math.floor(100000 + Math.random() * 900000)}</text>
+      <text x="370" y="130" fill="#94a3b8" font-size="12" font-family="Inter" font-weight="600" text-anchor="end">${date}</text>
+      <line x1="30" y1="150" x2="370" y2="150" stroke="rgba(255,255,255,0.08)" stroke-width="1" />
+      ${itemRows}
+      <line x1="30" y1="${height - 90}" x2="370" y2="${height - 90}" stroke="rgba(255,255,255,0.08)" stroke-width="1" />
+      <text x="30" y="${height - 65}" fill="#64748b" font-size="13" font-family="Inter">TAX (GST 18%):</text>
+      <text x="370" y="${height - 65}" fill="#cbd5e1" font-size="13" font-family="Inter" font-weight="600" text-anchor="end">₹${tax.toFixed(2)}</text>
+      <text x="30" y="${height - 35}" fill="#f8fafc" font-size="15" font-family="Outfit" font-weight="800">GRAND TOTAL:</text>
+      <text x="370" y="${height - 35}" fill="#10b981" font-size="19" font-family="Outfit" font-weight="800" text-anchor="end">₹${total.toFixed(2)}</text>
+    </svg>
+  `;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+// Generate complete set of mock vouchers and entries instantly
+async function generateMockData() {
+  showToast('Populating mobile ledger details...', 'info');
+
+  const currentMonthKey = state.selectedMonth;
+  const [year, month] = currentMonthKey.split('-');
+  
+  // Reset current month entries first
+  state.months[currentMonthKey] = { days: [] };
+  const currentMonth = state.months[currentMonthKey];
+
+  // We will generate 3 realistic days: Day 1, Day 3, and Day 5
+  const activeDays = [1, 3, 5];
+  
+  for (const dayNum of activeDays) {
+    const formattedDate = `${year}-${month}-${String(dayNum).padStart(2, '0')}`;
+    const dayId = `day-mock-${dayNum}-${Date.now()}`;
+
+    const newDay = {
+      id: dayId,
+      dayNumber: dayNum,
+      date: formattedDate,
+      expenses: []
+    };
+
+    let itemsToPick = [];
+    if (dayNum === 1) {
+      itemsToPick = [MOCK_CATEGORIES[0], MOCK_CATEGORIES[1], MOCK_CATEGORIES[4]]; // Rent, AWS, Taxi
+    } else if (dayNum === 3) {
+      itemsToPick = [MOCK_CATEGORIES[2], MOCK_CATEGORIES[3]]; // Dinner, Internet
+    } else {
+      itemsToPick = [MOCK_CATEGORIES[5]]; // Stationery
+    }
+
+    for (let i = 0; i < itemsToPick.length; i++) {
+      const cat = itemsToPick[i];
+      const expId = `exp-mock-${dayNum}-${i}-${Date.now()}`;
+      const voucherId = `v-${expId}`;
+      const vName = `expense${i + 1}.svg`; // Automatically named expense1, expense2 sequentially!
+
+      // Generate custom mock receipt SVG
+      const base64Receipt = generateSVGReceipt(cat.merchant, cat.items, cat.tax, cat.total, formattedDate);
+      
+      // Save heavy voucher string to IndexedDB
+      await window.db.saveVoucher(voucherId, base64Receipt);
+
+      newDay.expenses.push({
+        id: expId,
+        name: cat.name,
+        amount: cat.total,
+        voucherId: voucherId,
+        voucherName: vName,
+        voucherType: 'image/svg+xml',
+        voucherSize: '3.4 KB'
+      });
+    }
+
+    currentMonth.days.push(newDay);
+  }
+
+  await saveState();
+  renderAll();
+  showToast('Demo vouchers and sequential receipts generated!', 'success');
+}
+
+// Toast notification display system
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toastContainer');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  
+  let icon = 'ℹ️';
+  if (type === 'success') icon = '✅';
+  if (type === 'error') icon = '❌';
+
+  toast.innerHTML = `
+    <span>${icon}</span>
+    <span>${message}</span>
+  `;
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(-15px)';
+    toast.style.transition = 'all 0.25s ease';
+    setTimeout(() => {
+      if (container.contains(toast)) container.removeChild(toast);
+    }, 250);
+  }, 3000);
+}
+
+// Utility file size formatter
+function formatBytes(bytes, decimals = 1) {
+  if (!+bytes) return '0 Bytes';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+}
+
+// HTML escape helper to prevent input injections
+function escapeHtml(string) {
+  return String(string)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// PACK AND EXPORT ENTIRE MONTH SHEET DATA + ALL INDEXEDDB ATTACHED BASE64 VOUCHERS
+async function exportToAdminJSON() {
+  const currentMonthKey = state.selectedMonth;
+  const currentMonth = state.months[currentMonthKey];
+  if (!currentMonth || currentMonth.days.length === 0) {
+    showToast('No data available to export.', 'error');
+    return;
+  }
+
+  showToast('Bundling ledger sheet & receipts...', 'info');
+
+  try {
+    const exportBundle = {
+      type: 'emyxpnse_export_package',
+      version: '1.0.0',
+      exportDate: new Date().toISOString(),
+      selectedMonth: currentMonthKey,
+      days: currentMonth.days,
+      vouchers: {} // Keyed by voucherId -> base64Data
+    };
+
+    // Asynchronously gather base64 vouchers from IndexedDB store
+    for (const day of currentMonth.days) {
+      for (const exp of day.expenses) {
+        if (exp.voucherId) {
+          const base64 = await window.db.getVoucher(exp.voucherId);
+          if (base64) {
+            exportBundle.vouchers[exp.voucherId] = base64;
+          }
+        }
+      }
+    }
+
+    const jsonString = JSON.stringify(exportBundle, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', `emyxpnse_ledger_${currentMonthKey}.json`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showToast('Ledger package downloaded successfully!', 'success');
+  } catch (err) {
+    console.error(err);
+    showToast('Export packing failed.', 'error');
+  }
+}

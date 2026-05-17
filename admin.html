@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EmyXpnse - Admin Audit Portal (Desktop Only)</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Admin Portal exclusive desktop styles overrides */
+    :root {
+      --bg-primary: #05070c;
+      --bg-secondary: #080d16;
+    }
+    
+    .brand-logo {
+      background: linear-gradient(135deg, var(--color-emerald), #059669);
+      box-shadow: 0 4px 10px rgba(16, 185, 129, 0.35);
+    }
+
+    /* Wide Desktop Specific Table Styling */
+    .admin-desktop-grid {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+    .admin-desktop-grid th {
+      background: rgba(0,0,0,0.25);
+      border-bottom: 2px solid var(--border-color);
+      padding: 12px 16px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .admin-desktop-grid td {
+      padding: 10px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.02);
+      vertical-align: middle;
+      transition: background-color 0.25s ease;
+    }
+    
+    /* Row status coloration */
+    .row-approved td {
+      background-color: rgba(16, 185, 129, 0.035) !important;
+    }
+    .row-flagged td {
+      background-color: rgba(244, 63, 94, 0.035) !important;
+    }
+
+    /* Status Pill buttons */
+    .status-pill-group {
+      display: flex;
+      gap: 6px;
+    }
+    .status-btn {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .status-btn.active.approved {
+      background: var(--color-emerald);
+      color: #fff;
+      border-color: var(--color-emerald);
+      box-shadow: 0 0 10px var(--color-emerald-glow);
+    }
+    .status-btn.active.flagged {
+      background: var(--color-rose);
+      color: #fff;
+      border-color: var(--color-rose);
+      box-shadow: 0 0 10px var(--color-rose-glow);
+    }
+    .status-btn:hover:not(.active) {
+      background: rgba(255,255,255,0.08);
+      color: var(--text-primary);
+    }
+
+    /* Import Ledger Drag-Drop Zone */
+    .import-dropzone {
+      background: rgba(16, 185, 129, 0.02);
+      border: 1.5px dashed rgba(16, 185, 129, 0.25);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+    .import-dropzone:hover {
+      background: rgba(16, 185, 129, 0.05);
+      border-color: var(--color-emerald);
+      box-shadow: 0 0 15px rgba(16, 185, 129, 0.1);
+    }
+    .import-dropzone input[type="file"] {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .import-title {
+      font-family: var(--font-brand);
+      font-weight: 700;
+      font-size: 0.85rem;
+      color: var(--color-emerald);
+      margin-bottom: 4px;
+    }
+    .import-subtitle {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    /* Desktop View overrides */
+    @media (min-width: 1025px) {
+      .app-sidebar {
+        width: 320px;
+      }
+      .app-footer {
+        left: 320px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="ambient-glow-1"></div>
+  <div class="ambient-glow-2"></div>
+
+  <!-- Header Section -->
+  <header class="app-header">
+    <div class="brand-section">
+      <div class="brand-logo" onclick="location.href='index.html'" title="Return to Portal Gateway">
+        💻 EMYXPNSE ADMIN
+      </div>
+      <span class="brand-title-sub" style="display:inline;">Corporate Audit Console</span>
+    </div>
+
+    <div class="header-controls">
+      <!-- Active Ledger Title -->
+      <span style="font-family: var(--font-brand); font-weight:700; font-size:0.9rem; color:var(--text-secondary); margin-right: 10px;" id="activeLedgerTitle">
+        No Ledger Loaded
+      </span>
+      <div class="month-selector-wrapper">
+        <select id="monthSelector" class="custom-select"></select>
+        <span class="select-arrow">▼</span>
+      </div>
+      
+      <button class="btn btn-primary" id="btnAddDay">
+        Add Day Card
+      </button>
+
+      <button class="btn btn-danger" id="btnLogout" style="min-height: 36px; height: 36px; padding: 0 12px; font-size: 0.8rem; margin-left: 5px;">
+        🚪 Logout
+      </button>
+    </div>
+  </header>
+
+  <!-- Application Body Layout -->
+  <div class="app-container">
+    
+    <!-- Left Sidebar: Import Zone & Analytics -->
+    <aside class="app-sidebar">
+      
+      <!-- IMPORT USER PACKAGE ZONE -->
+      <section class="stat-card" style="border-color: rgba(16, 185, 129, 0.25);">
+        <div class="sidebar-title" style="border: none; padding-bottom: 6px;">
+          📥 Import User Ledger
+        </div>
+        <div class="import-dropzone">
+          <div class="import-title">📥 Upload User Ledger JSON</div>
+          <div class="import-subtitle">Drag-drop or browse user export file</div>
+          <input type="file" id="importFileInput" accept=".json" />
+        </div>
+      </section>
+
+      <!-- Month Summary Analytics -->
+      <section class="stats-container">
+        <div class="sidebar-title">
+          📊 Audit Verification Metrics
+        </div>
+        
+        <div class="stat-card emerald">
+          <div class="stat-label">Total Audited Amount</div>
+          <div class="stat-value emerald" id="sidebarMonthTotal">₹0.00</div>
+          <div class="stat-sub">Live compiled sheet sum</div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="stat-card indigo">
+            <div class="stat-label">Verification Rate</div>
+            <div class="stat-value" id="sidebarAuditRate">0%</div>
+          </div>
+          <div class="stat-card indigo">
+            <div class="stat-label font-brand">Receipts</div>
+            <div class="stat-value" id="sidebarVoucherCount">0</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Spend Category Charts -->
+      <section class="analytics-widget">
+        <div class="sidebar-title" style="border: none; padding-bottom: 0;">
+          📈 Category Spend Share
+        </div>
+        <div class="category-chart" id="categoryChartContainer">
+          <!-- Live groupings -->
+        </div>
+      </section>
+
+    </aside>
+
+    <!-- Right Workspace: High-Density Wide Spreadsheet Grid -->
+    <main class="app-workspace">
+      
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap;">
+        <!-- Filter Panel -->
+        <div class="search-container">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted)"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="searchInput" class="search-input" placeholder="Search by name, serial (1.2), amount, or status..." />
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <button class="btn" id="btnGenerateMock" style="border-color:rgba(16,185,129,0.3); color:var(--color-emerald)">
+            ⚡ Load Demo Ledger
+          </button>
+          <button class="btn btn-danger" id="btnResetDB">
+            Clear Ledger
+          </button>
+        </div>
+      </div>
+
+      <!-- Wide Spreadsheet Card Stack Container -->
+      <div id="workspaceContainer" style="display: flex; flex-direction: column; gap: 24px;">
+        <!-- Dynamic Day Cards loaded with Table Grids -->
+      </div>
+
+    </main>
+
+  </div>
+
+  <!-- Sticky Desktop Footer totals & Sign-off -->
+  <footer class="app-footer">
+    <div class="footer-totals">
+      <div class="total-display-item">
+        <span class="total-display-label">GRAND COMPILED TOTAL</span>
+        <span class="total-display-value emerald" id="footerGrandTotal">₹0.00</span>
+      </div>
+    </div>
+
+    <div class="footer-actions">
+      <button class="btn" id="btnExportCSV">
+        📥 Export Audit CSV
+      </button>
+      <button class="btn btn-success" id="btnSignOff" style="background: linear-gradient(135deg, var(--color-emerald), #059669)">
+        ✅ Sign-off & Print PDF Report
+      </button>
+    </div>
+  </footer>
+
+  <!-- Lightbox Modal Container for Full Voucher Previews -->
+  <div class="lightbox-modal" id="lightboxModal">
+    <div class="lightbox-content" onclick="event.stopPropagation()">
+      <button class="lightbox-close-btn" id="lightboxClose">×</button>
+      
+      <div id="lightboxFrame" style="width: 100%; display: flex; justify-content: center; align-items: center;"></div>
+      
+      <div class="lightbox-details" id="lightboxDetails"></div>
+
+      <div class="lightbox-actions">
+        <a class="btn btn-primary" id="lightboxDownloadBtn" href="#" download>📥 Save Invoice Receipt</a>
+        <button class="btn" onclick="closeLightbox()">Close Preview</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Scripts -->
+  <script src="db.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

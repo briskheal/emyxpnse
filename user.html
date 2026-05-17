@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EmyXpnse - User Portal (Mobile Only)</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* User Portal Branding Colors override to Purple theme */
+    .brand-logo {
+      background: linear-gradient(135deg, var(--color-indigo), #8b5cf6);
+      box-shadow: 0 4px 10px rgba(99, 102, 241, 0.35);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="ambient-glow-1"></div>
+  <div class="ambient-glow-2"></div>
+
+  <!-- Header Section -->
+  <header class="app-header">
+    <div class="brand-section">
+      <div class="brand-logo" onclick="location.href='index.html'" title="Return to Portal Gateway">
+        📱 EMYXPNSE
+      </div>
+      <span class="brand-title-sub">Mobile Expense Tracker</span>
+    </div>
+
+    <div class="header-controls">
+      <div class="month-selector-wrapper">
+        <select id="monthSelector" class="custom-select"></select>
+        <span class="select-arrow">▼</span>
+      </div>
+
+      <button class="btn btn-primary" id="btnAddDay">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        Add Day
+      </button>
+
+      <button class="btn btn-danger" id="btnLogout" style="min-height: 36px; height: 36px; padding: 0 10px; font-size: 0.75rem;">
+        🚪 Logout
+      </button>
+    </div>
+  </header>
+
+  <!-- Application Body Layout -->
+  <div class="app-container">
+    
+    <!-- Left Sidebar: Mobile Stats Drawer (Collapsible/top area) -->
+    <aside class="app-sidebar">
+      <section class="stats-container">
+        <div class="sidebar-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+          Active Month Summary
+        </div>
+        
+        <div class="stat-card emerald">
+          <div class="stat-label">Total Spent This Month</div>
+          <div class="stat-value emerald" id="sidebarMonthTotal">₹0.00</div>
+          <div class="stat-sub">Aggregated live from your entries</div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="stat-card indigo">
+            <div class="stat-label">Days Logged</div>
+            <div class="stat-value" id="sidebarDayCount">0</div>
+          </div>
+          <div class="stat-card indigo">
+            <div class="stat-label">Receipts</div>
+            <div class="stat-value" id="sidebarVoucherCount">0</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Category Grouping Widget -->
+      <section class="analytics-widget">
+        <div class="sidebar-title" style="border: none; padding-bottom: 0;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+          Category breakdown
+        </div>
+        <div class="category-chart" id="categoryChartContainer">
+          <!-- Dynamically populated analysis charts -->
+        </div>
+      </section>
+    </aside>
+
+    <!-- Main Workspace: Day cards list -->
+    <main class="app-workspace">
+      
+      <!-- Workspace Top actions -->
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div class="search-container">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted)"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="searchInput" class="search-input" placeholder="Search entries, serials, amount..." />
+        </div>
+
+        <div style="display: flex; gap: 10px; width: 100%;">
+          <button class="btn" id="btnGenerateMock" style="flex: 1; border-color:rgba(16,185,129,0.3); color:var(--color-emerald)">
+            ⚡ Load Demo
+          </button>
+          <button class="btn btn-danger" id="btnResetDB" style="flex: 1;">
+            Clear All
+          </button>
+        </div>
+      </div>
+
+      <!-- Main Ledger Day Card Lists -->
+      <div id="workspaceContainer" style="display: flex; flex-direction: column; gap: 20px;">
+        <!-- Day cards render dynamically -->
+      </div>
+
+    </main>
+
+  </div>
+
+  <!-- Sticky Floating Footer totals & options -->
+  <footer class="app-footer">
+    <div class="footer-totals">
+      <div class="total-display-item">
+        <span class="total-display-label">Active Month Total</span>
+        <span class="total-display-value" id="footerGrandTotal">₹0.00</span>
+      </div>
+    </div>
+
+    <!-- Main Actions: Export PDF, CSV and Direct Admin JSON Pack Export -->
+    <div class="footer-actions">
+      <button class="btn btn-primary" id="btnExportAdmin" style="background: linear-gradient(135deg, var(--color-indigo), #8b5cf6);">
+        📤 Export for Admin
+      </button>
+      <button class="btn" id="btnExportCSV" style="border-color:rgba(255,255,255,0.15)">
+        CSV
+      </button>
+    </div>
+  </footer>
+
+  <!-- Lightbox Modal Container for Full Voucher Previews -->
+  <div class="lightbox-modal" id="lightboxModal">
+    <div class="lightbox-content" onclick="event.stopPropagation()">
+      <button class="lightbox-close-btn" id="lightboxClose">×</button>
+      
+      <div id="lightboxFrame" style="width: 100%; display: flex; justify-content: center; align-items: center;"></div>
+      
+      <div class="lightbox-details" id="lightboxDetails"></div>
+
+      <div class="lightbox-actions">
+        <a class="btn btn-primary" id="lightboxDownloadBtn" href="#" download>📥 Save Image</a>
+        <button class="btn" onclick="closeLightbox()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Scripts -->
+  <script src="db.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
