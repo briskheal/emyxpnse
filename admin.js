@@ -1030,8 +1030,16 @@ function renderCategoryBreakdown(monthData) {
   if (!chartContainer) return;
 
   const categories = {};
+  let disapprovedCount = 0;
+
   monthData.days.forEach(day => {
     day.expenses.forEach(exp => {
+      // Exclude flagged/disapproved items from standard category spends and count them
+      if (exp.auditStatus === 'flagged') {
+        disapprovedCount++;
+        return;
+      }
+
       const rawName = exp.name.trim() || 'Uncategorized';
       let catName = 'General';
       
@@ -1054,7 +1062,7 @@ function renderCategoryBreakdown(monthData) {
 
   const categoryEntries = Object.entries(categories).sort((a, b) => b[1] - a[1]);
 
-  if (categoryEntries.length === 0) {
+  if (categoryEntries.length === 0 && disapprovedCount === 0) {
     chartContainer.innerHTML = `<div class="empty-analytics-msg">No expense analysis details entered.</div>`;
     return;
   }
@@ -1079,6 +1087,30 @@ function renderCategoryBreakdown(monthData) {
     `;
     chartContainer.appendChild(row);
   });
+
+  // Render a dedicated glassmorphic warning card for Disapproval count to alert the Admin
+  if (disapprovedCount > 0) {
+    const warningRow = document.createElement('div');
+    warningRow.className = 'category-row';
+    warningRow.style.cssText = 'background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.2); border-radius: 8px; padding: 10px; margin-top: 10px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);';
+    warningRow.innerHTML = `
+      <div class="category-row-header" style="margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+        <span class="category-name" style="color: var(--color-rose); font-weight: 700; font-family: var(--font-brand); display: flex; align-items: center; gap: 4px;">
+          🚨 Disapproval - No's ${disapprovedCount}
+        </span>
+        <span class="category-amt" style="color: var(--color-rose); font-weight: 700; font-family: var(--font-brand); font-size: 0.8rem; background: rgba(244, 63, 94, 0.15); padding: 2px 6px; border-radius: 4px;">
+          ${disapprovedCount} ${disapprovedCount === 1 ? 'Item' : 'Items'}
+        </span>
+      </div>
+      <div class="category-progress-bar" style="background: rgba(255,255,255,0.05); height: 5px;">
+        <div class="category-progress-fill" style="width: 100%; background: linear-gradient(90deg, var(--color-rose), #f43f5e) !important;"></div>
+      </div>
+      <div style="font-size: 0.7rem; color: #fecdd3; margin-top: 6px; font-weight: 500; font-style: italic; line-height: 1.3;">
+        Take serious action! Employee is submitting details without proper documentation or proof.
+      </div>
+    `;
+    chartContainer.appendChild(warningRow);
+  }
 }
 
 // Lightbox preview viewer
@@ -1127,7 +1159,7 @@ async function viewVoucher(expId) {
 
     details.innerHTML = `
       <div class="lightbox-title">${escapeHtml(targetExp.voucherName)}</div>
-      <div class="lightbox-meta">${targetExp.name || 'No Description'} • ${targetExp.voucherSize} • Amount: ₹${targetExp.amount.toFixed(2)}</div>
+      <div class="lightbox-meta">${targetExp.name || 'No Description'} • ${targetExp.voucherSize} • Amount: ₹${(parseFloat(targetExp.amount) || 0).toFixed(2)}</div>
     `;
 
     // Foolproof type detection checking both metadata and actual data URL prefix
