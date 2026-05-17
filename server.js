@@ -358,11 +358,15 @@ app.post('/api/sync/day', async (req, res) => {
     // 2. Synchronize child expense items and their base64 vouchers
     if (expenses && expenses.length > 0) {
       for (const item of expenses) {
-        // Retrieve base64 voucher attachment if exists in payload
-        const voucherData = item.voucherId ? (vouchers[item.voucherId] || null) : null;
-
         // Look up existing item to preserve auditor's comments and approval statuses on mobile sync override
         const existingItem = await db.ExpenseItem.findByPk(item.id);
+
+        // Retrieve base64 voucher attachment if exists in payload, preserving database state if already present to prevent data loss!
+        let voucherData = item.voucherId ? (vouchers[item.voucherId] || null) : null;
+        if (!voucherData && existingItem && existingItem.voucherId === item.voucherId) {
+          voucherData = existingItem.voucherData;
+        }
+
         const finalStatus = item.auditStatus || (existingItem ? existingItem.auditStatus : 'pending');
         const finalComment = item.adminComment || (existingItem ? existingItem.adminComment : '');
 

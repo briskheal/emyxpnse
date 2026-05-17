@@ -737,7 +737,25 @@ function renderVoucherCell(dayId, exp) {
 // Asynchronously load heavy base64 to image element
 async function loadVoucherThumbnail(expId) {
   try {
-    const base64 = await window.db.getVoucher(`v-${expId}`);
+    let base64 = await window.db.getVoucher(`v-${expId}`);
+
+    // Dynamic Fallback: If not found in local cache, fetch from live cloud database
+    if (!base64 && navigator.onLine) {
+      try {
+        const res = await fetch(`/api/ledger/item/${expId}/voucher`);
+        if (res.ok) {
+          const result = await res.json();
+          if (result.success && result.voucherData) {
+            base64 = result.voucherData;
+            // Silently cache it in IndexedDB so subsequent loads are instant and offline-capable!
+            await window.db.saveVoucher(`v-${expId}`, base64);
+          }
+        }
+      } catch (netErr) {
+        console.error('Failed to load online thumbnail:', netErr);
+      }
+    }
+
     if (base64) {
       const img = document.getElementById(`thumb-img-${expId}`);
       if (img) img.src = base64;
@@ -1019,6 +1037,13 @@ async function uploadVoucher(dayId, expId, file) {
       await saveState();
       renderAll();
       showToast('Voucher attached successfully.', 'success');
+
+      // AUTO-SYNC RECEIPT ATTACHMENT TO DATABASE:
+      // If the device is online, automatically sync the updated Day card to Supabase in the background!
+      if (navigator.onLine) {
+        showToast('Auto-syncing receipt attachment to cloud database...', 'info');
+        await syncSingleDay(dayId);
+      }
     } catch (err) {
       console.error(err);
       showToast('Attachment processing failed.', 'error');
@@ -1051,6 +1076,12 @@ async function removeVoucher(dayId, expId) {
     await saveState();
     renderAll();
     showToast('Voucher receipt removed.');
+
+    // Auto-sync removal to cloud database
+    if (navigator.onLine) {
+      showToast('Syncing removal to database...', 'info');
+      await syncSingleDay(dayId);
+    }
   } catch (err) {
     showToast('Removal failed.', 'error');
   }
@@ -1078,7 +1109,24 @@ async function viewVoucher(expId) {
   showToast('Loading image preview...', 'info');
 
   try {
-    const base64Data = await window.db.getVoucher(`v-${expId}`);
+    // 1. Try to read from IndexedDB first (offline check)
+    let base64Data = await window.db.getVoucher(`v-${expId}`);
+
+    // 2. Dynamic Fallback: If not found in local IndexedDB, fetch high-res attachment from live PostgreSQL!
+    if (!base64Data && navigator.onLine) {
+      try {
+        const res = await fetch(`/api/ledger/item/${expId}/voucher`);
+        if (res.ok) {
+          const result = await res.json();
+          if (result.success && result.voucherData) {
+            base64Data = result.voucherData;
+          }
+        }
+      } catch (netErr) {
+        console.error('Failed to retrieve voucher attachment from server:', netErr);
+      }
+    }
+
     if (!base64Data) {
       showToast('Voucher receipt not found.', 'error');
       return;
@@ -1089,10 +1137,13 @@ async function viewVoucher(expId) {
       <div class="lightbox-meta">${targetExp.name || 'No Description'} • ${targetExp.voucherSize} • Amount: ₹${targetExp.amount.toFixed(2)}</div>
     `;
 
-    // Render depending on MIME type
-    if (targetExp.voucherType.startsWith('image/')) {
+    // Foolproof type detection checking both metadata and actual data URL prefix
+    const isImage = (targetExp.voucherType && targetExp.voucherType.startsWith('image/')) || base64Data.startsWith('data:image/');
+    const isPDF = (targetExp.voucherType && targetExp.voucherType === 'application/pdf') || base64Data.startsWith('data:application/pdf');
+
+    if (isImage) {
       frameContainer.innerHTML = `<img class="lightbox-preview" src="${base64Data}" alt="voucher fullsize"/>`;
-    } else if (targetExp.voucherType === 'application/pdf') {
+    } else if (isPDF) {
       frameContainer.innerHTML = `<iframe class="lightbox-preview" src="${base64Data}" style="width: 100%; height: 50vh; border:none;"></iframe>`;
     } else {
       frameContainer.innerHTML = `

@@ -1130,9 +1130,13 @@ async function viewVoucher(expId) {
       <div class="lightbox-meta">${targetExp.name || 'No Description'} • ${targetExp.voucherSize} • Amount: ₹${targetExp.amount.toFixed(2)}</div>
     `;
 
-    if (targetExp.voucherType.startsWith('image/')) {
+    // Foolproof type detection checking both metadata and actual data URL prefix
+    const isImage = (targetExp.voucherType && targetExp.voucherType.startsWith('image/')) || base64Data.startsWith('data:image/');
+    const isPDF = (targetExp.voucherType && targetExp.voucherType === 'application/pdf') || base64Data.startsWith('data:application/pdf');
+
+    if (isImage) {
       frameContainer.innerHTML = `<img class="lightbox-preview" src="${base64Data}" alt="voucher fullsize"/>`;
-    } else if (targetExp.voucherType === 'application/pdf') {
+    } else if (isPDF) {
       frameContainer.innerHTML = `<iframe class="lightbox-preview" src="${base64Data}" style="width: 100%; height: 50vh; border:none;"></iframe>`;
     } else {
       frameContainer.innerHTML = `
