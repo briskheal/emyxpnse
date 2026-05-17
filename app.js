@@ -70,6 +70,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 5. Initial render cycle
     renderAll();
     
+    // 6. Seamlessly synchronize with cloud database in background to fetch auditor deletions & edits!
+    await fetchCloudLedger();
+    
     showToast('Mobile Expense Dashboard Ready', 'success');
   } catch (err) {
     console.error('App start failure:', err);
@@ -142,14 +145,17 @@ function populateMonthSelector() {
 // Bind Global UI Actions
 function bindEventListeners() {
   // Month selector dropdown change
-  document.getElementById('monthSelector').addEventListener('change', (e) => {
+  document.getElementById('monthSelector').addEventListener('change', async (e) => {
     state.selectedMonth = e.target.value;
     if (!state.months[state.selectedMonth]) {
       state.months[state.selectedMonth] = { days: [] };
     }
-    saveState();
+    await saveState();
     renderAll();
     showToast(`Switched sheet to: ${e.target.selectedOptions[0].textContent}`);
+    
+    // Automatically trigger cloud ledger pull sync on month switch!
+    await fetchCloudLedger();
   });
 
   // Main global interaction buttons
@@ -1582,6 +1588,9 @@ async function syncLocalDaysToCloud() {
   await saveState();
   renderAll();
   showToast("Sync cycle complete!", "success");
+  
+  // Automatically trigger cloud ledger pull sync to align with latest cloud state!
+  await fetchCloudLedger();
 }
 
 // Helper to generate standard RFC4122 v4 UUID strings in client side PWA
@@ -1649,4 +1658,102 @@ async function syncSingleDay(dayId) {
   // 3. Save local IndexedDB state & refresh views in-place!
   await saveState();
   renderAll();
+  
+  // Automatically trigger cloud ledger pull sync to align with latest cloud state!
+  await fetchCloudLedger();
+}
+
+// Automatically pull live synced employee ledger submissions from Supabase cloud database
+// and merge them to synchronize any auditor comments, status changes, or permanent deletions!
+async function fetchCloudLedger() {
+  if (!navigator.onLine) return;
+
+  const loginId = sessionStorage.getItem('emyxpnse_login_id') || localStorage.getItem('emyxpnse_login_id');
+  if (!loginId) return;
+
+  const currentMonthKey = state.selectedMonth;
+  try {
+    // 1. Fetch user-scoped synced day cards from cloud database
+    const response = await fetch(`/api/ledger/${currentMonthKey}?loginId=${loginId}&role=user`);
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success && result.days) {
+        const cloudDays = result.days;
+        const cloudDayIds = new Set(cloudDays.map(d => d.id));
+
+        const currentMonth = state.months[currentMonthKey];
+        if (currentMonth && currentMonth.days) {
+          // A. Synchronize deletions: If a card was previously synced but is now missing from the cloud,
+          // it means the auditor deleted it permanently! We must delete it locally too.
+          for (let i = currentMonth.days.length - 1; i >= 0; i--) {
+            const localDay = currentMonth.days[i];
+            if (localDay.syncStatus === 'synced' && !cloudDayIds.has(localDay.id)) {
+              console.log(`Auto-sync delete: Purging deleted cloud day card ${localDay.id} locally.`);
+              // Cascading voucher cleanup
+              if (localDay.expenses) {
+                for (const exp of localDay.expenses) {
+                  if (exp.voucherId) {
+                    try {
+                      await window.db.deleteVoucher(exp.voucherId);
+                    } catch (e) {
+                      console.error('Failed to delete voucher:', e);
+                    }
+                  }
+                }
+              }
+              currentMonth.days.splice(i, 1);
+            }
+          }
+
+          // B. Synchronize updates and row deletions inside remaining days
+          for (const cloudDay of cloudDays) {
+            const localDay = currentMonth.days.find(d => d.id === cloudDay.id);
+            if (localDay) {
+              // Update parent day attributes
+              localDay.dayNumber = cloudDay.dayNumber;
+              localDay.date = cloudDay.date;
+              localDay.syncStatus = 'synced';
+
+              // Synchronize expense rows: The auditor might have deleted specific rows on the cloud database!
+              const cloudExpIds = new Set((cloudDay.expenses || []).map(e => e.id));
+
+              // Clean up local vouchers for any deleted rows
+              if (localDay.expenses) {
+                for (const localExp of localDay.expenses) {
+                  if (!cloudExpIds.has(localExp.id) && localExp.voucherId) {
+                    try {
+                      await window.db.deleteVoucher(localExp.voucherId);
+                    } catch (e) {
+                      console.error('Failed to delete row voucher:', e);
+                    }
+                  }
+                }
+              }
+
+              // Replace local synced expenses with pristine server list to pull auditor comments/approvals
+              localDay.expenses = cloudDay.expenses || [];
+            } else {
+              // C. If the synced day exists on cloud but is missing locally (e.g. cleared browser cache),
+              // reconstruct and restore it locally!
+              currentMonth.days.push({
+                id: cloudDay.id,
+                dayNumber: cloudDay.dayNumber,
+                date: cloudDay.date,
+                syncStatus: 'synced',
+                expenses: cloudDay.expenses || []
+              });
+            }
+          }
+
+          // D. Sort chronologically so the ledger card list is always clean and ordered!
+          currentMonth.days.sort((a, b) => a.date.localeCompare(b.date));
+
+          await saveState();
+          renderAll();
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Failed to auto-sync cloud ledger deletions:', err);
+  }
 }
