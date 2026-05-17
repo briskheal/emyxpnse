@@ -66,6 +66,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     bindAdminEvents();
 
     // 4. Initial audit compilation
+    await fetchCloudLedger();
     renderAll();
     
     showToast('Admin Audit Dashboard Activated', 'success');
@@ -99,6 +100,26 @@ async function saveState() {
     await window.db.saveSheetData(state);
   } catch (err) {
     console.error('Error saving state:', err);
+  }
+}
+
+// Automatically pull live employee ledger sync submissions from Supabase cloud database
+async function fetchCloudLedger() {
+  if (!navigator.onLine) return;
+  
+  const currentMonthKey = state.selectedMonth;
+  try {
+    const response = await fetch(`/api/ledger/${currentMonthKey}`);
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success && result.days) {
+        state.months[currentMonthKey] = { days: result.days };
+        // We preserve local state save silently to prevent redundant write loop overhead
+        await window.db.saveSheetData(state);
+      }
+    }
+  } catch (err) {
+    console.error('Failed to fetch cloud ledger:', err);
   }
 }
 
@@ -143,7 +164,7 @@ function bindAdminEvents() {
       state.months[state.selectedMonth] = { days: [] };
     }
     saveState();
-    renderAll();
+    fetchCloudLedger().then(() => renderAll());
     showToast(`Switched audit sheet: ${e.target.selectedOptions[0].textContent}`);
   });
 
@@ -365,9 +386,8 @@ function renderWorkspace(searchQuery = '') {
         <div class="empty-state-icon">📂</div>
         <h3>No Expense Data Loaded</h3>
         <p>This desktop sheet is currently empty. Import a mobile user ledger package JSON file on the left, load the demo ledger, or manually build expense items.</p>
-        <div style="display:flex; gap:10px; width: 100%; max-width: 400px;">
+        <div style="display:flex; gap:10px; width: 100%; max-width: 200px;">
           <button class="btn btn-primary" onclick="addNewDay()" style="flex:1;">➕ Start Ledger</button>
-          <button class="btn" onclick="generateMockLedger()" style="border-color:rgba(16,185,129,0.3); color:var(--color-emerald); flex:1;">⚡ Load Demo</button>
         </div>
       </div>
     `;
@@ -404,7 +424,7 @@ function renderWorkspace(searchQuery = '') {
     // Header structure for Desktop day sheet
     card.innerHTML = `
       <div class="day-header" style="padding: 14px 20px;">
-        <div class="day-info">
+        <div class="day-info" style="display:flex; align-items:center; gap:8px;">
           <div class="day-badge">
             Day 
             <input type="number" value="${day.dayNumber}" min="1" max="31" 
@@ -415,6 +435,9 @@ function renderWorkspace(searchQuery = '') {
           <input type="date" class="day-date-picker" value="${day.date}" 
             onchange="updateDayDate('${day.id}', this.value)"
           />
+          <span style="font-size:0.75rem; font-weight:700; background:rgba(99,102,241,0.15); color:var(--color-indigo); padding:4px 8px; border-radius:6px; border:1px solid rgba(99,102,241,0.3); display:inline-flex; align-items:center; gap:4px; text-transform:capitalize;" title="Submitted by Employee">
+            👤 Employee: ${day.loginId || 'user'}
+          </span>
         </div>
         <div class="day-actions">
           <div class="day-subtotal">Day Subtotal: ₹${dayTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>

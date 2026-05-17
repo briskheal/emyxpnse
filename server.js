@@ -315,7 +315,8 @@ app.post('/api/sync/day', async (req, res) => {
       id: id,
       selectedMonth: monthKey,
       dayNumber: parseInt(dayNumber) || 1,
-      date: date
+      date: date,
+      loginId: loginId || 'user'
     }, { transaction });
 
     // 2. Synchronize child expense items and their base64 vouchers

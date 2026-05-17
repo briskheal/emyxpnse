@@ -181,9 +181,7 @@ function bindEventListeners() {
     }
   });
 
-  document.getElementById('btnGenerateMock').addEventListener('click', () => {
-    generateMockData();
-  });
+
 
   // Search input filtering
   document.getElementById('searchInput').addEventListener('input', (e) => {
@@ -408,7 +406,6 @@ function renderWorkspace(searchQuery = '') {
         <p>This sheet is completely empty. Create a stacked Day card to record mobile expenses with camera uploads and automatic sequential naming.</p>
         <div style="display:flex; flex-direction:column; gap:10px; width: 100%;">
           <button class="btn btn-primary" onclick="addNewDay()">➕ Start Day 1</button>
-          <button class="btn" onclick="generateMockData()" style="border-color:rgba(16,185,129,0.3); color:var(--color-emerald)">⚡ Load Demo Receipts</button>
         </div>
       </div>
     `;

@@ -15,7 +15,11 @@ module.exports = (sequelize, DataTypes) => {
     date: { 
       type: DataTypes.STRING, 
       allowNull: false 
-    } // Saved as "YYYY-MM-DD"
+    }, // Saved as "YYYY-MM-DD"
+    loginId: {
+      type: DataTypes.STRING,
+      defaultValue: 'user'
+    }
   }, { 
     timestamps: true 
   });
