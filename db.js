@@ -50,15 +50,26 @@ class EmyXpnseDB {
   }
 
   /**
+   * Resolves the active user session's login ID to create a user-scoped cache key.
+   * This guarantees that different employees logging in on the same browser/device
+   * never see or overwrite each other's offline draft records!
+   */
+  getUserKey() {
+    const loginId = sessionStorage.getItem('emyxpnse_login_id') || localStorage.getItem('emyxpnse_login_id') || 'guest';
+    return `current_state_${loginId}`;
+  }
+
+  /**
    * Saves the main sheets data configuration (excluding heavy base64 strings).
    * @param {Object} data The sheet state.
    */
   async saveSheetData(data) {
     await this.init();
+    const userKey = this.getUserKey();
     return new Promise((resolve, reject) => {
       const transaction = this.db.transaction([STORE_DATA], 'readwrite');
       const store = transaction.objectStore(STORE_DATA);
-      const request = store.put(data, 'current_state');
+      const request = store.put(data, userKey);
 
       request.onsuccess = () => resolve(true);
       request.onerror = () => reject(request.error);
@@ -71,10 +82,11 @@ class EmyXpnseDB {
    */
   async getSheetData() {
     await this.init();
+    const userKey = this.getUserKey();
     return new Promise((resolve, reject) => {
       const transaction = this.db.transaction([STORE_DATA], 'readonly');
       const store = transaction.objectStore(STORE_DATA);
-      const request = store.get('current_state');
+      const request = store.get(userKey);
 
       request.onsuccess = () => resolve(request.result || null);
       request.onerror = () => reject(request.error);
