@@ -417,13 +417,17 @@ if (dbEnabled) {
   db.sequelize.sync().then(async () => {
     console.log('✅ PostgreSQL Supabase Models synchronized successfully.');
     
-    // Seed default credentials if user database is empty!
+    // Seed default credentials if admin/user accounts don't exist!
     try {
-      const userCount = await db.User.count();
-      if (userCount === 0) {
+      const adminExists = await db.User.findOne({ where: { loginId: 'admin' } });
+      if (!adminExists) {
         await db.User.create({ loginId: 'admin', password: 'EMYXPNSE@2026', role: 'admin' });
+        console.log('🌱 [SEED SUCCESS]: Created default auditor: admin / EMYXPNSE@2026');
+      }
+      const userExists = await db.User.findOne({ where: { loginId: 'user' } });
+      if (!userExists) {
         await db.User.create({ loginId: 'user', password: 'EMYXPNSE@2026', role: 'user' });
-        console.log('🌱 [SEED SUCCESS]: Created default auditor: admin / EMYXPNSE@2026 and employee: user / EMYXPNSE@2026');
+        console.log('🌱 [SEED SUCCESS]: Created default employee: user / EMYXPNSE@2026');
       }
     } catch (seedErr) {
       console.error('🌱 [SEED FAILURE]: Failed to sync default credential rows:', seedErr.message);
