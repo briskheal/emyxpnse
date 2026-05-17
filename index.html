@@ -209,9 +209,11 @@
         if (response.ok && result.success) {
           showToast(`Welcome back, ${result.loginId}!`, 'success');
           
-          // Save session locally to identify logged-in profile
+           // Save session locally to identify logged-in profile
           sessionStorage.setItem('emyxpnse_user_role', result.role);
           sessionStorage.setItem('emyxpnse_login_id', result.loginId);
+          localStorage.setItem('emyxpnse_user_role', result.role);
+          localStorage.setItem('emyxpnse_login_id', result.loginId);
 
           // Route intelligently by security roles
           setTimeout(() => {
@@ -236,11 +238,15 @@
           showToast('Offline Mode: Admin authenticated.', 'success');
           sessionStorage.setItem('emyxpnse_user_role', 'admin');
           sessionStorage.setItem('emyxpnse_login_id', 'admin');
+          localStorage.setItem('emyxpnse_user_role', 'admin');
+          localStorage.setItem('emyxpnse_login_id', 'admin');
           setTimeout(() => { location.href = 'admin.html'; }, 800);
         } else if (loginId === 'user' && password === 'EMYXPNSE@2026') {
           showToast('Offline Mode: Employee authenticated.', 'success');
           sessionStorage.setItem('emyxpnse_user_role', 'user');
           sessionStorage.setItem('emyxpnse_login_id', 'user');
+          localStorage.setItem('emyxpnse_user_role', 'user');
+          localStorage.setItem('emyxpnse_login_id', 'user');
           setTimeout(() => { location.href = 'user.html'; }, 800);
         } else {
           showToast('Invalid offline credentials. Try: user / EMYXPNSE@2026', 'error');

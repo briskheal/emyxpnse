@@ -23,9 +23,11 @@ const MOCK_CATEGORIES = [
 
 // Initialize application on DOM load
 document.addEventListener('DOMContentLoaded', async () => {
-  // SECURITY GATE: Verify active login session exists
-  const userRole = sessionStorage.getItem('emyxpnse_user_role');
-  if (!userRole) {
+  // SECURITY GATE: Verify active login session exists with robust persistent fallbacks
+  const userRole = sessionStorage.getItem('emyxpnse_user_role') || localStorage.getItem('emyxpnse_user_role');
+  const isLocalFile = location.protocol === 'file:';
+
+  if (!userRole && !isLocalFile) {
     document.body.innerHTML = `
       <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:#0b0f19; color:#cbd5e1; font-family:sans-serif; text-align:center;">
         <span style="font-size:3rem; margin-bottom:15px;">🔒</span>

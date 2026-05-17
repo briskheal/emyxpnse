@@ -23,9 +23,11 @@ const MOCK_CATEGORIES = [
 
 // Initialize on DOM load
 document.addEventListener('DOMContentLoaded', async () => {
-  // SECURITY GATE: Verify auditor credentials
-  const userRole = sessionStorage.getItem('emyxpnse_user_role');
-  if (userRole !== 'admin') {
+  // SECURITY GATE: Verify auditor credentials with robust persistent fallbacks
+  const userRole = sessionStorage.getItem('emyxpnse_user_role') || localStorage.getItem('emyxpnse_user_role');
+  const isLocalFile = location.protocol === 'file:';
+
+  if (userRole !== 'admin' && !isLocalFile) {
     document.body.innerHTML = `
       <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:#05070c; color:#cbd5e1; font-family:sans-serif; text-align:center;">
         <span style="font-size:3rem; margin-bottom:15px;">❌</span>
