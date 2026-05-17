@@ -492,6 +492,32 @@ app.put('/api/ledger/item/:id', async (req, res) => {
   }
 });
 
+// REST API — Get a single expense item's voucher data (Base64 string)
+app.get('/api/ledger/item/:id/voucher', async (req, res) => {
+  if (!dbEnabled) {
+    return res.status(503).json({ success: false, error: 'Database is in offline mode.' });
+  }
+
+  try {
+    const item = await db.ExpenseItem.findByPk(req.params.id, {
+      attributes: ['voucherData', 'voucherType', 'voucherName']
+    });
+    if (!item || !item.voucherData) {
+      return res.status(404).json({ success: false, error: 'Voucher attachment not found.' });
+    }
+
+    res.json({ 
+      success: true, 
+      voucherData: item.voucherData,
+      voucherType: item.voucherType,
+      voucherName: item.voucherName
+    });
+  } catch (err) {
+    console.error('Fetch voucher failure:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // SPA routing fallback
 app.get('*', (req, res, next) => {
   // If request is for an API endpoint, do not send index.html

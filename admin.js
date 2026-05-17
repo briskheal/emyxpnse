@@ -1091,9 +1091,26 @@ async function viewVoucher(expId) {
   showToast('Loading voucher receipt preview...', 'info');
 
   try {
-    const base64Data = await window.db.getVoucher(`v-${expId}`);
+    // 1. Try to read from IndexedDB first (offline check)
+    let base64Data = await window.db.getVoucher(`v-${expId}`);
+
+    // 2. Dynamic Fallback: If not found in auditor's IndexedDB, fetch high-res attachment from live PostgreSQL!
+    if (!base64Data && navigator.onLine) {
+      try {
+        const res = await fetch(`/api/ledger/item/${expId}/voucher`);
+        if (res.ok) {
+          const result = await res.json();
+          if (result.success && result.voucherData) {
+            base64Data = result.voucherData;
+          }
+        }
+      } catch (netErr) {
+        console.error('Failed to retrieve voucher attachment from server:', netErr);
+      }
+    }
+
     if (!base64Data) {
-      showToast('Voucher attachment not found.', 'error');
+      showToast('Voucher attachment not found on server or locally.', 'error');
       return;
     }
 
